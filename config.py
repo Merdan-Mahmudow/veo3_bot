@@ -10,5 +10,6 @@ class ENV(BaseSettings):
     yc_s3_access_key_id: str
     yc_s3_secret_access_key: str
     yc_s3_endpoint_url: str = "https://storage.yandexcloud.net"
+    webhook_endpoint: str
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")

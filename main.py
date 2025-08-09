@@ -1,18 +1,9 @@
 from __future__ import annotations
 import asyncio
+from api.app import FastAPIManager
 
-from aiogram import Bot, Dispatcher
-from config import ENV
-import routers
 
-env = ENV()
-bot = Bot(token=env.BOT_TOKEN)
-dp = Dispatcher()
-
-async def main():
-    dp.include_router(routers.router)
-    await dp.start_polling(bot)
+server_manager = FastAPIManager()
 
 if __name__ == "__main__":
-    asyncio.run(main())
-
+    asyncio.run(server_manager.start_server())

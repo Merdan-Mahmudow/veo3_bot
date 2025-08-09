@@ -1,6 +1,5 @@
 import aiohttp
 from config import ENV
-from schemas import VeoResponse
 
 class GenerateRequests():
     def __init__(self):
@@ -46,6 +45,7 @@ class GenerateRequests():
 
         payload = {
             "prompt": prompt,
+            "imageUrls": [imageUrl],
             "model": "veo3_fast",
             "aspectRatio": "16:9",
             "enableFallback": False

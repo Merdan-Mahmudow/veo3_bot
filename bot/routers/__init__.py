@@ -2,9 +2,8 @@ import asyncio
 from aiogram import Router, types, F
 from aiogram.filters.command import Command, CommandObject
 from aiogram.fsm.context import FSMContext
-import fsm
-from generate import GenerateRequests
-from schemas import VeoResponse
+from bot import fsm
+from api.generate import GenerateRequests
 
 router = Router()
 
