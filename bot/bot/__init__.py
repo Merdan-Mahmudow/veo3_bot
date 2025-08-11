@@ -28,3 +28,4 @@ class BotManager:
     async def bot_stop(self):
         await self.bot.delete_webhook()
         await self.bot.session.close()
+

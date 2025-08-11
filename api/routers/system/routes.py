@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Request
 from api.routers.system import SystemRoutesManager
-from bot.bot import BotManager
+from bot.manager import bot_manager
 
 router = APIRouter()
-bot_manager = BotManager()
-SRM = SystemRoutesManager(bot_manager=bot_manager)
+
+SRM = SystemRoutesManager()
 
 @router.post("/bot", include_in_schema=False)
 async def webhook_handler(request: Request):

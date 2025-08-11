@@ -1,11 +1,9 @@
-
-
 from fastapi import Request
 from aiogram.types import Update
-from bot.bot import BotManager
+from bot.manager import bot_manager
 
 class SystemRoutesManager:
-    def __init__(self, bot_manager: BotManager):
+    def __init__(self):
         self.bot_dp = bot_manager.dp
         self.bot = bot_manager.bot
     

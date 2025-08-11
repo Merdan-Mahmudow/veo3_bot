@@ -12,4 +12,19 @@ class ENV(BaseSettings):
     yc_s3_endpoint_url: str = "https://storage.yandexcloud.net"
     webhook_endpoint: str
 
+    bot_api_token: str
+
+    POSTGRES_HOST: str
+    POSTGRES_PORT: str
+    POSTGRES_NAME: str
+    POSTGRES_USER: str
+    POSTGRES_PASS: str
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
+class Settings():
+    def __init__(self):
+        self.env = ENV()
+
+    def generate_postgres_url(self) -> str:
+        return f"postgresql+asyncpg://{self.env.POSTGRES_USER}:{self.env.POSTGRES_PASS}@{self.env.POSTGRES_HOST}:{self.env.POSTGRES_PORT}/{self.env.POSTGRES_NAME}"

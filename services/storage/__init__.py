@@ -1,10 +1,11 @@
+import uuid
 import boto3
 from config import ENV
 
 class YandexS3Storage():
     def __init__(self):
         self.settings = ENV()
-        self.bucket = ""
+        self.bucket = "veobot"
         self.s3 = boto3.client(
             "s3",
             endpoint_url=self.settings.yc_s3_endpoint_url,
@@ -19,10 +20,13 @@ class YandexS3Storage():
         except:
             self.s3.create_bucket(Bucket=self.bucket)
 
-    def save(self, image_bytes: bytes, filename: str) -> None:
+    def save(self, file_bytes: bytes, ext: str) -> None:
+        filename = f"{uuid.uuid4()}{ext}"
+
         self.s3.put_object(
             Bucket=self.bucket,
             Key=filename,
-            Body=image_bytes,
+            Body=file_bytes,
             StorageClass="COLD"
         )
+        return f"https://storage.yandexcloud.net/{self.bucket}/{filename}"
