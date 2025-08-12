@@ -12,9 +12,6 @@ class RegisterResult(TypedDict, total=False):
     created: bool
     reason: str  # "exists" и т.п.
 
-
-# --- Исключения домена клиента ---
-
 class BackendError(Exception): ...
 class BackendAuthError(BackendError): ...
 class BackendNotFound(BackendError): ...

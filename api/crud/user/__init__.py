@@ -6,6 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from .schema import CoinMinus, CoinPlus, UserDelete, UserRead, UserRegister
 from api.database import get_async_session
 from api.models.user import User
+
+
 class UserNotFound(Exception): ...
 class BusinessRuleError(Exception): ...
 

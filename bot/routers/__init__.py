@@ -68,7 +68,7 @@ async def command_start(message: types.Message, state: FSMContext):
     try:
         coins = await backend.get_coins(message.from_user.id)
     except Exception:
-        coins = 0  # если не достали баланс — не роняем UX
+        coins = 0
 
     if not exists:
         text = (
