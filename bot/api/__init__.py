@@ -198,3 +198,23 @@ class BackendAPI:
         payload = {"chat_id": str(chat_id), "count": int(count)}
         resp = await self._request("POST", "/users/coins/plus", json=payload, expected=(200,))
         return int(resp.json().get("coins", 0))
+    
+
+    async def generate_text(self, chat_id: int, prompt: str) -> dict:
+        payload = {"chat_id": chat_id, "prompt": prompt}
+        resp = await self._request("POST", "/bot/veo/generate/text", json=payload, expected=(200,))
+        return resp.json()
+
+
+    async def generate_photo(self, chat_id: int, prompt: str, file_bytes: bytes, filename: str = "image.jpg") -> dict:
+        client = await self._ensure_client()
+        files = {"image": (filename, file_bytes)}
+        data = {"chat_id": str(chat_id), "prompt": prompt}  # Form-поля
+        resp = await client.post("/bot/veo/generate/photo", data=data, files=files)
+        if resp.status_code == 200:
+            return resp.json()
+        if resp.status_code == 400:
+            raise RuntimeError(resp.json().get("detail", "bad request"))
+        if resp.status_code == 401:
+            raise PermissionError("Invalid X-Api-Key for backend")
+        raise RuntimeError(f"Unexpected {resp.status_code}: {resp.text}")

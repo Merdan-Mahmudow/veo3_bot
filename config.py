@@ -21,6 +21,8 @@ class ENV(BaseSettings):
     POSTGRES_PASS: str
 
     redis_url: str
+    
+    test_payment_token: str
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

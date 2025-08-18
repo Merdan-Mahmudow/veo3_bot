@@ -13,6 +13,7 @@ class FastAPIManager:
         self.api.include_router(SystemRoutes.router)
         self.api.include_router(GenerateRoutes.router)
         self.api.include_router(GenerateRoutes.public_router)
+        self.api.include_router(GenerateRoutes.internal)
         self.api.include_router(AuthRoutes.router)
 
     def start_server(self):

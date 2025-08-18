@@ -3,6 +3,7 @@ from __future__ import annotations
 from aiogram import Bot, Dispatcher
 from config import ENV
 from bot import routers
+from bot.routers.payment import router as payment_router
 import asyncio
 from aiogram.exceptions import TelegramRetryAfter
 
@@ -15,6 +16,7 @@ class BotManager:
         self.add_routes()
 
     def add_routes(self):
+        self.dp.include_router(payment_router)
         if routers.router.parent_router is None:
             self.dp.include_router(routers.router)
 

@@ -15,15 +15,22 @@ class BotNotifier:
         *,
         chat_id: str,
         task_id: str,
-        result_url: str,
+        result_url: Optional[str] = None,
         source_url: Optional[str] = None,
         fallback: bool = False,
     ) -> None:
+        print({
+            "chat_id": chat_id,
+            "task_id": task_id,
+            "result_url": result_url,
+            "source_url": source_url,
+            "fallback": fallback,
+        })
         if not self.url:
             return
         headers = {"Content-Type": "application/json"}
         payload = {
-            "chat_id": chat_id,
+            "chat_id": str(chat_id),
             "task_id": task_id,
             "result_url": result_url,
             "source_url": source_url,

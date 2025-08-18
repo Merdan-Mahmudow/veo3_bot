@@ -48,6 +48,6 @@ class CallbackOut(BaseModel):
 class VideoReadyIn(BaseModel):
     chat_id: str
     task_id: str
-    result_url: str
+    result_url: str | None = None
     source_url: str | None = None
     fallback: bool | None = None

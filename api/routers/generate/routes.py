@@ -6,6 +6,7 @@ from api.security import require_bot_service
 from services.veo import VeoCallbackAuthError, VeoService, VeoServiceError
 from sqlalchemy.ext.asyncio import AsyncSession
 from bot.manager import bot_manager
+from aiogram import types
 
 router = APIRouter(prefix="/bot/veo", tags=["bot-veo"], dependencies=[Depends(require_bot_service)])
 
@@ -79,9 +80,10 @@ internal = APIRouter(prefix="/internal", tags=["internal"])
 @internal.post("/veo/video-ready")
 async def video_ready(payload: VideoReadyIn):
     text = (
-        "Видео готово!\n\n"
-        f"👉 {payload.result_url}\n"
-        f"(источник: {payload.source_url})"
+        "Видео готово!"
     )
-    await bot_manager.bot.send_message(payload.chat_id, text)
+    await bot_manager.bot.send_video(chat_id=payload.chat_id,
+                                     video=types.URLInputFile(payload.result_url),
+                                     caption=text,
+                                     show_caption_above_media=True)
     return {"ok": True}

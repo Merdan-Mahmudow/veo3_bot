@@ -64,9 +64,7 @@ class VeoService:
 
     # ---------- колбэк ----------
 
-    async def handle_callback(self, payload: dict, *, auth_ok: bool) -> dict:
-        if not auth_ok:
-            raise VeoCallbackAuthError("Callback unauthorized")
+    async def handle_callback(self, payload: dict) -> dict:
 
         data = (payload or {}).get("data") or {}
         task_id = data.get("taskId")
