@@ -2,13 +2,16 @@ from __future__ import annotations
 from typing import Optional
 import aiohttp
 
+from config import ENV
+
 class BotNotifier:
     """
     Бэк дергает эндпоинт бота.
     Если URL не задан — тихо пропускаем.
     """
     def __init__(self):
-        self.url = "http://0.0.0.0:8000/internal/veo/video-ready"
+        self.env = ENV()
+        self.url = f"{self.env.BASE_URL}/internal/veo/video-ready"
 
     async def video_ready(
         self,
