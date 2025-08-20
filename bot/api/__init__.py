@@ -5,6 +5,8 @@ import httpx
 import logging
 from dataclasses import dataclass
 
+from config import ENV
+
 
 # --- Типы результатов ---
 
@@ -34,10 +36,11 @@ class BackendAPI:
     Клиент для api.skyrodev.ru (бот-интерфейс).
     Авторизация: заголовок X-Api-Key (service-to-service).
     """
+    env = ENV()
     def __init__(
         self,
         api_key: str,
-        base_url: str = "http://0.0.0.0:8000",
+        base_url: str = env.BASE_URL,
         timeout: float = 5.0,
         retry: RetryConfig | None = None,
     ):

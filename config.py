@@ -24,6 +24,12 @@ class ENV(BaseSettings):
     
     test_payment_token: str
 
+    OPENAI_API_KEY: str
+    OPENAI_MODEL: str
+
+    BASE_URL: str
+    CALLBACK_PATH: str
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 class Settings():

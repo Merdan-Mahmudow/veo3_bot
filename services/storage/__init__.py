@@ -13,7 +13,7 @@ class YandexS3Storage:
     def __init__(self):
         self.settings = ENV()
         self.bucket = "veobot"
-        self.public_base = f"https://storage.yandexcloud.net/{self.bucket}"
+        self.public_base = f"{self.settings.yc_s3_endpoint_url}/{self.bucket}"
         self.s3 = boto3.client(
             "s3",
             endpoint_url=self.settings.yc_s3_endpoint_url,

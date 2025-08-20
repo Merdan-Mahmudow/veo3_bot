@@ -1,4 +1,3 @@
-import asyncio
 from io import BytesIO
 from typing import Optional
 from aiogram import Router, types, F
@@ -8,25 +7,21 @@ from bot import fsm
 from bot.api import BackendAPI
 from config import ENV
 from services.kie import GenerateRequests
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 router = Router()
 env = ENV()
 backend = BackendAPI(env.bot_api_token)
 
 
+
 def start_keyboard():
-    kb = [
-        [
-            types.InlineKeyboardButton(
-                text="📽️ Генерация видео по тексту", callback_data="generate_by_text")
-        ],
-        [
-            types.InlineKeyboardButton(
-                text="🎥 Генерация видео по фото", callback_data="generate_by_photo")
-        ]
-    ]
-    inline_kb = types.InlineKeyboardMarkup(inline_keyboard=kb)
-    return inline_kb
+    kb = InlineKeyboardBuilder()
+    kb.button(text="Сгенерировать по тексту", callback_data="generate_by_text")
+    kb.button(text="Сгенерировать по фото", callback_data="generate_by_photo")
+    kb.button(text="Помощь с промптом", callback_data="prompt_help")  # <–– новая
+    kb.adjust(1, 1, 1)
+    return kb.as_markup()
 
 
 @router.message(Command("start"))
@@ -45,7 +40,7 @@ async def command_start(message: types.Message, state: FSMContext):
         # Баннер
         await message.answer_photo(
             photo=types.URLInputFile(
-                "https://storage.yandexcloud.net/veobot/photo_2025-08-12_00-07-56.jpg"),
+                f"{env.yc_s3_endpoint_url}/veobot/photo_2025-08-12_00-07-56.jpg"),
             caption="Привет! Я генерирую для тебя лучшее видео по твоему запросу.\n\n"
         )
 
@@ -295,3 +290,20 @@ async def test_details(message: types.Message, command: CommandObject):
         return
     req = await generate.get_video_info(args.replace(" ", ""))
     print(req)
+
+
+@router.callback_query(F.data == "prompt_help")
+async def prompt_help_entry(callback: types.CallbackQuery, state: FSMContext):
+    await callback.answer()
+    await state.clear()
+    await state.update_data(
+        prompt_attempt=0,
+        prompt_brief=None,
+        prompt_last=None,
+        prompt_clarifications=[],
+    )
+    await callback.message.answer(
+        "Окей. Кратко опиши, какое видео ты хочешь получить: тема/сцена, настроение, стилистика.\n"
+        "Например: «неоновый город ночью, дождь, киберпанк, динамичный ракурс»."
+    )
+    await state.set_state(fsm.PromptAssistantState.waiting_brief)

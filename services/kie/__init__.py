@@ -7,7 +7,7 @@ class GenerateRequests:
     def __init__(self):
         self.env = ENV()
         self.token = self.env.KIE_TOKEN
-        self.callback_url = "https://api.skyrodev.ru/veo/complete"
+        self.callback_url = f"{self.env.BASE_URL}/{self.env.CALLBACK_PATH}"
 
     async def _request(self, method: str, url: str, **kwargs) -> dict:
         headers = kwargs.pop("headers", {})
