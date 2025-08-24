@@ -3,6 +3,7 @@ import uvicorn
 from api.routers.system import routes as SystemRoutes
 from api.routers.generate import routes as GenerateRoutes
 from api.routers.auth import routes as AuthRoutes
+from api.routers.gpt import routes as GptRoutes
 
 class FastAPIManager:
     def __init__(self):
@@ -15,6 +16,7 @@ class FastAPIManager:
         self.api.include_router(GenerateRoutes.public_router)
         self.api.include_router(GenerateRoutes.internal)
         self.api.include_router(AuthRoutes.router)
+        self.api.include_router(GptRoutes.router)
 
     def start_server(self):
         uvicorn.run(self.api, host="0.0.0.0", port=8000)

@@ -10,3 +10,10 @@ class PromptAssistantState(StatesGroup):
     waiting_brief = State()
     waiting_clarifications = State()
     reviewing = State()
+    editing = State()
+
+    # --- Состояния FSM ---
+class PhotoState(StatesGroup):
+    waiting_photo = State()         # ждём фотографию
+    reviewing = State()             # показываем промпт и ждём решение
+    editing = State()               # ждём правки

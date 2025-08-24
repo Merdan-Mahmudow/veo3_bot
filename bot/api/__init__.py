@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Optional, TypedDict
+from typing import List, Optional, TypedDict
 import asyncio
 import httpx
 import logging
@@ -41,7 +41,7 @@ class BackendAPI:
         self,
         api_key: str,
         base_url: str = env.BASE_URL,
-        timeout: float = 5.0,
+        timeout: float = 120.0,
         retry: RetryConfig | None = None,
     ):
         self.base_url = base_url.rstrip("/")
@@ -221,3 +221,24 @@ class BackendAPI:
         if resp.status_code == 401:
             raise PermissionError("Invalid X-Api-Key for backend")
         raise RuntimeError(f"Unexpected {resp.status_code}: {resp.text}")
+
+    async def suggest_prompt(
+        self,
+        chat_id: str,
+        brief: str,
+        clarifications: Optional[List[str]] = None,
+        attempt: int = 1,
+        previous_prompt: Optional[str] = None,
+        aspect_ratio: str = "16:9",
+    ) -> str:
+        payload = {
+            "chat_id": chat_id,
+            "brief": brief,
+            "clarifications": clarifications,
+            "attempt": attempt,
+            "previous_prompt": previous_prompt,
+            "aspect_ratio": aspect_ratio,
+        }
+        resp = await self._request("POST", f"{self.base_url}/prompt/suggest", json=payload)
+        data = resp.json()
+        return data["prompt"]

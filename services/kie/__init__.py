@@ -3,6 +3,7 @@ from config import ENV
 
 import aiohttp
 
+
 class GenerateRequests:
     def __init__(self):
         self.env = ENV()
@@ -22,8 +23,12 @@ class GenerateRequests:
 
     async def generate_video_by_text(self, prompt: str):
         url = "https://api.kie.ai/api/v1/veo/generate"
-        payload = {"prompt": prompt, "model": "veo3_fast", "aspectRatio": "16:9",
-                   "callBackUrl": self.callback_url, "enableFallback": False}
+        payload = {
+            "prompt": prompt, 
+            "model": "veo3_fast", 
+            "aspectRatio": "16:9",
+            "callBackUrl": self.callback_url, 
+            "enableFallback": False}
         headers = {"Content-Type": "application/json"}
         return await self._request("POST", url, json=payload, headers=headers)
 
@@ -34,7 +39,12 @@ class GenerateRequests:
 
     async def generate_video_by_photo(self, prompt: str, imageUrl: str):
         url = "https://api.kie.ai/api/v1/veo/generate"
-        payload = {"prompt": prompt, "imageUrls": [imageUrl], "model": "veo3_fast",
-                   "aspectRatio": "16:9", "enableFallback": False}
+        payload = {
+            "prompt": prompt, 
+            "imageUrls": [imageUrl], 
+            "model": "veo3_fast",
+            "aspectRatio": "16:9",
+            "callBackUrl": self.callback_url,
+            "enableFallback": False, }
         headers = {"Content-Type": "application/json"}
         return await self._request("POST", url, json=payload, headers=headers)

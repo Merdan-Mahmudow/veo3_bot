@@ -29,3 +29,16 @@ class RedisClient:
 
     async def del_task(self, task_id: str) -> int:
         return await self.redis.delete(f"veo:task:{task_id}")
+
+    async def set_prompt(self, key: str, value: Any, ttl: int = 3600) -> None:
+        await self.redis.set(key, str(value), ex=ttl)
+
+    async def get_prompt(self, key: str) -> Optional[Any]:
+        raw = await self.redis.get(key)
+        if not raw:
+            return None
+        try:
+            return str(raw)
+        except Exception:
+            return None
+    

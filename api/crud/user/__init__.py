@@ -79,3 +79,8 @@ class UserService(UserInterface):
         if new_value is None:
             raise UserNotFound("User not found")
         return new_value
+    
+    async def list_user_chat_ids(self, session: AsyncSession) -> list[str]:
+        res = await session.execute(select(User.chat_id))
+        chat_ids = res.scalars().all()
+        return chat_ids
