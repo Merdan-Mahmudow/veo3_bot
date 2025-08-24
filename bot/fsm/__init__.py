@@ -17,3 +17,8 @@ class PhotoState(StatesGroup):
     waiting_photo = State()         # ждём фотографию
     reviewing = State()             # показываем промпт и ждём решение
     editing = State()               # ждём правки
+
+class PaymentState(StatesGroup):
+    choosing_plan = State()         # выбираем план
+    processing_payment = State()    # ждём оплаты
+    confirming = State()            # подтверждаем оплату

@@ -1,12 +1,18 @@
-
-
+from __future__ import annotations
 from typing import Optional
+from fastapi import Form
 from pydantic import BaseModel
+
 
 
 class GenerateTextIn(BaseModel):
     chat_id: str
     prompt: str
+
+class GeneratePhotoIn(BaseModel):
+    chat_id: str
+    prompt: str
+    image_url: Optional[str] = None
 
 class GenerateOut(BaseModel):
     ok: bool

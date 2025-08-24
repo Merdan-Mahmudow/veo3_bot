@@ -146,34 +146,37 @@ Add genre cues: *film-noir high contrast*, *Pixar-style cartoon*, *retro 80s VHS
 - [ ] Ready to iterate if needed
 """
 
-        user = (
-            f"Краткое ТЗ пользователя: {brief}\n"
-            f"{clar_text}\n"
-            f"Номер попытки: {attempt}.\n"
-        )
-
+        text_parts = []
+        if brief:
+            text_parts.append(f"{brief}")
+        if clar_text:
+            text_parts.append(clar_text)
         if previous_prompt:
-            # Просим слегка изменить, а не писать «совершенно другой» — чтобы не ускакать от запроса
-            user += (
+            text_parts.append(
                 "Предыдущий вариант промпта оказался неподходящим. "
                 "Сгенерируй новый вариант, немного изменённый относительно предыдущего: "
                 "измени словарь, конкретику сцены, ракурс/движение камеры или настроение, "
                 "но сохрани первоначальную идею.\n"
-                f"Предыдущий промпт: {previous_prompt}\n"
+                f"Предыдущий промпт: {previous_prompt}"
             )
-
-        messages = [
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ]
+        user_text = "\n".join(text_parts)
         if image_url:
             messages = [
                 {"role": "system", "content": system},
-                {"role": "user", "content": [
-                    {"type": "text", "text": user},
-                    {"type": "image_url", "image_url": image_url}
-                ]},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": brief},
+                        {"type": "image_url", "image_url": {"url": image_url}},
+                    ],
+                },
             ]
+        else:
+            messages = [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user_text},
+            ]
+
         resp = await self.client.chat.completions.create(
             model=self.model,
             temperature=1,

@@ -9,17 +9,22 @@ from bot.api import BackendAPI
 from config import ENV
 from services.kie import GenerateRequests
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from services.storage import YandexS3Storage
 
 router = Router()
 env = ENV()
 backend = BackendAPI(env.bot_api_token)
+storage = YandexS3Storage()
 
 
 
 def start_keyboard():
     kb = InlineKeyboardBuilder()
     kb.button(text="Сгенерировать по тексту", callback_data="generate_by_text")
-    kb.button(text="Сгенерировать по фото", callback_data="generate_by_photo")
+    kb.button(text="Сгенерировать по фото", callback_data="generate_photo")
+    kb.button(text="💰 Пополнить баланс", callback_data="buy_coins")
+    kb.button(text="Что умею?", callback_data="help")
+    kb.button(text="Поддержка", url=f"https://t.me/{env.SUPPORT_USERNAME}")
     kb.adjust(1, 1)
     return kb.as_markup()
 
@@ -113,6 +118,8 @@ async def callback_generate_by_text(callback: types.CallbackQuery, state: FSMCon
         "✍️ Введите описание своего видео для генерации.\n\n"
         "Если хотите оживить фото — нажмите /start и выберите генерацию по фото."
     )
+    await state.clear()
+    await state.update_data(mode="text")
     await state.set_state(fsm.BotState.waiting_for_text_description)
 
 
@@ -131,7 +138,7 @@ async def handle_text_description(message: types.Message, state: FSMContext):
             clarifications=None,
             attempt=1,
             previous_prompt=None,
-            aspect_ratio="16:9",
+            # aspect_ratio="16:9",
         )
     except Exception as e:
         logging.exception("Ошибка получения промпта: %s", e)
@@ -170,6 +177,8 @@ async def callback_generate_by_photo(callback: types.CallbackQuery, state: FSMCo
         "Пример: отправь фото и подпиши «стиль неон/киберпанк, динамичный город, сумерки».",
         parse_mode="Markdown"
     )
+    await state.clear()
+    await state.update_data(mode="photo")
     await state.set_state(fsm.BotState.waiting_for_photo)
 
 # ---------- Получаем фото (с подписью) ----------
@@ -227,6 +236,7 @@ async def _start_generate_by_photo(message: types.Message, state: FSMContext, pr
 
     # зовём backend
     try:
+        print(prompt)
         res = await backend.generate_photo(
             chat_id=message.from_user.id,
             prompt=prompt,
@@ -325,16 +335,46 @@ async def prompt_help_entry(callback: types.CallbackQuery, state: FSMContext):
 @router.callback_query(fsm.PromptAssistantState.reviewing, F.data == "prompt_accept")
 async def prompt_accept(callback: types.CallbackQuery, state: FSMContext):
     data = await state.get_data()
-    accepted = data.get("prompt_last")
-    if not accepted:
+    prompt_text = data.get("prompt_last")
+    if not prompt_text:
         await callback.answer("Нет промпта для принятия", show_alert=True)
         return
+
+    mode = data.get("mode")  # 'text' или 'photo'
     await callback.answer("Промпт принят ✅")
-    # запускаем генерацию видео по тексту или фото (определите по data['mode'])
-    # пример для текста:
-    task = await backend.generate_text(chat_id=str(callback.from_user.id), prompt=accepted)
-    await callback.message.answer(f"Генерация запущена! После завершения бот пришлёт результат.")
-    await state.clear()
+
+    try:
+        if mode == "photo":
+            # Получаем URL (или id) ранее сохранённого изображения
+            image_url = data.get("image_url")
+            if not image_url:
+                await callback.message.answer("Не удалось найти изображение для генерации.")
+                await state.clear()
+                return
+
+            # Вызываем генерацию по фото, используя один и тот же image_url
+            task = await backend.generate_photo(
+                chat_id=str(callback.from_user.id),
+                prompt=prompt_text,
+                image_url=image_url,
+                )
+
+        else:
+            # Генерация по тексту
+            task = await backend.generate_text(
+                chat_id=str(callback.from_user.id),
+                prompt=prompt_text,
+            )
+
+        await callback.message.answer(
+            "Генерация запущена! После завершения бот пришлёт результат."
+        )
+
+    except Exception as e:
+        logging.exception("Ошибка запуска генерации: %s", e)
+        await callback.message.answer("❌ Не удалось запустить генерацию.")
+    finally:
+        await state.clear()
 
 @router.callback_query(fsm.PromptAssistantState.reviewing, F.data == "prompt_other")
 async def prompt_other(callback: types.CallbackQuery, state: FSMContext):
@@ -351,7 +391,7 @@ async def prompt_other(callback: types.CallbackQuery, state: FSMContext):
             clarifications=clar,
             attempt=attempt,
             previous_prompt=last,
-            aspect_ratio="16:9",
+            # aspect_ratio="16:9",
         )
     except Exception as e:
         logging.exception("Ошибка получения нового варианта: %s", e)
@@ -391,7 +431,7 @@ async def prompt_receive_edit(message: types.Message, state: FSMContext):
         clarifications=clar,
         attempt=attempt,
         previous_prompt=last,
-        aspect_ratio="16:9",
+        # aspect_ratio="16:9",
     )
     await state.update_data(prompt_clarifications=clar, prompt_last=suggestion, prompt_attempt=attempt)
     await message.answer(
@@ -412,39 +452,37 @@ async def prompt_reject(callback: types.CallbackQuery, state: FSMContext):
 @router.callback_query(F.data == "generate_photo")
 async def start_photo_flow(callback: types.CallbackQuery, state: FSMContext):
     await state.clear()
+    await state.update_data(mode="photo")
     await callback.answer()
     await callback.message.answer("Пришли фотографию и короткое описание (в подписи), чтобы я смог подготовить промпт.")
     await state.set_state(fsm.PhotoState.waiting_photo)
 
-# --- Получаем фото с подписью ---
 @router.message(fsm.PhotoState.waiting_photo)
-async def handle_photo_input(message: types.Message, state: FSMContext):
-    if not message.photo or not message.caption:
-        await message.answer("Отправь именно фото с подписью, в которой кратко опиши сюжет.")
+async def handle_photo(message: types.Message, state: FSMContext):
+    if not message.photo:
+        await message.answer("Отправь изображение.")
         return
 
-    # сохраняем id файла (или скачиваем байты)
-    file_id = message.photo[-1].file_id
-    brief = message.caption.strip()
+    photo_id = message.photo[-1].file_id
+    # Скачиваем файл один раз
+    file = await message.bot.get_file(photo_id)
+    file_bytes = await message.bot.download_file(file.file_path)
 
-    # сохраняем исходные данные
-    await state.update_data(
-        photo_file_id=file_id,
-        prompt_brief=brief,
-        prompt_attempt=1,
-        prompt_last=None,
-        prompt_clarifications=[],
-        mode="photo"
-    )
+    # Загружаем на S3 и получаем URL
+    image_url = storage.save(file_bytes.getvalue(), extension=".jpg", prefix="prompt_inputs/")
 
-    # запрашиваем первый вариант промпта
+    # Сохраняем URL в состоянии – пригодится при генерации видео
+    await state.update_data(image_url=image_url, prompt_attempt=1, prompt_clarifications=[])
+
+    # Просим GPT сгенерировать промпт, передав image_url
     suggestion = await backend.suggest_prompt(
         chat_id=str(message.chat.id),
-        brief=brief,
+        brief=message.caption or "",
         clarifications=None,
         attempt=1,
         previous_prompt=None,
-        aspect_ratio="16:9",
+        # aspect_ratio="16:9",
+        image_url=image_url,
     )
 
     await state.update_data(prompt_last=suggestion)
@@ -452,7 +490,7 @@ async def handle_photo_input(message: types.Message, state: FSMContext):
         f"Предложенный промпт:\n\n{suggestion}",
         reply_markup=prompt_options_kb()
     )
-    await state.set_state(fsm.PhotoState.reviewing)
+    await state.set_state(fsm.PromptAssistantState.reviewing)
 
 # --- Обработка кнопок в состоянии reviewing ---
 @router.callback_query(fsm.PhotoState.reviewing, F.data == "prompt_accept")
@@ -499,7 +537,7 @@ async def photo_prompt_other(callback: types.CallbackQuery, state: FSMContext):
         clarifications=clar,
         attempt=attempt,
         previous_prompt=last,
-        aspect_ratio="16:9",
+        # aspect_ratio="16:9",
     )
     await state.update_data(prompt_last=suggestion, prompt_attempt=attempt)
     await callback.message.edit_text(
@@ -533,7 +571,7 @@ async def photo_prompt_receive_edit(message: types.Message, state: FSMContext):
         clarifications=clar,
         attempt=attempt,
         previous_prompt=last,
-        aspect_ratio="16:9",
+        # aspect_ratio="16:9",
     )
     await state.update_data(prompt_clarifications=clar, prompt_last=suggestion, prompt_attempt=attempt)
     await message.answer(

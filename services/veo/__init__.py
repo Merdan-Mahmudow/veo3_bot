@@ -41,8 +41,9 @@ class VeoService:
             await self._refund_one_coin(chat_id, session)
             raise
 
-    async def generate_by_photo(self, chat_id: str, prompt: str, image_bytes: bytes, image_ext: str, session: AsyncSession) -> dict:
-        input_url = self.storage.save(image_bytes, image_ext, prefix="inputs/")
+    async def generate_by_photo(self, chat_id: str, prompt: str, image_url: str | None, session: AsyncSession) -> dict:
+        if image_url:
+            input_url = image_url
         await self._charge_one_coin(chat_id, session)
         try:
             resp = await self.gen.generate_video_by_photo(prompt=prompt, imageUrl=input_url)

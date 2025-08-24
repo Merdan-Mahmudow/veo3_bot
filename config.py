@@ -29,6 +29,7 @@ class ENV(BaseSettings):
 
     BASE_URL: str
     CALLBACK_PATH: str
+    SUPPORT_USERNAME: str
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

@@ -209,11 +209,27 @@ class BackendAPI:
         return resp.json()
 
 
-    async def generate_photo(self, chat_id: int, prompt: str, file_bytes: bytes, filename: str = "image.jpg") -> dict:
+    async def generate_photo(
+        self,
+        chat_id: int,
+        prompt: str,
+        file_bytes: bytes | None = None,
+        image_url: str | None = None,
+        filename: str = "image.jpg",
+    ) -> dict:
         client = await self._ensure_client()
-        files = {"image": (filename, file_bytes)}
-        data = {"chat_id": str(chat_id), "prompt": prompt}  # Form-поля
-        resp = await client.post("/bot/veo/generate/photo", data=data, files=files)
+
+        if image_url:
+            # если URL уже есть, отправляем JSON без файлов
+            payload = {"chat_id": str(chat_id), "prompt": prompt, "image_url": image_url}
+            print(payload)
+            resp = await self._request("POST", "/bot/veo/generate/photo", json=payload, expected=(200, 400, 401))
+        else:
+            # иначе отправляем multipart с байтами изображения
+            files = {"image": (filename, file_bytes)}
+            data = {"chat_id": str(chat_id), "prompt": prompt}
+            resp = await self._request("POST", "/bot/veo/generate/photo", json=data, files=files, expected=(200, 400, 401))
+
         if resp.status_code == 200:
             return resp.json()
         if resp.status_code == 400:
@@ -229,7 +245,8 @@ class BackendAPI:
         clarifications: Optional[List[str]] = None,
         attempt: int = 1,
         previous_prompt: Optional[str] = None,
-        aspect_ratio: str = "16:9",
+        # aspect_ratio: str = "16:9",
+        image_url: Optional[str] = None,
     ) -> str:
         payload = {
             "chat_id": chat_id,
@@ -237,7 +254,8 @@ class BackendAPI:
             "clarifications": clarifications,
             "attempt": attempt,
             "previous_prompt": previous_prompt,
-            "aspect_ratio": aspect_ratio,
+            # "aspect_ratio": aspect_ratio,
+            "image_url": image_url,
         }
         resp = await self._request("POST", f"{self.base_url}/prompt/suggest", json=payload)
         data = resp.json()

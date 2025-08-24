@@ -13,12 +13,13 @@ async def suggest_prompt(data: PromptRequest) -> PromptResponse:
         # генерируем промпт
         ai = PromptAI()
         prompt_text = await ai.suggest_prompt(
-            brief=data.brief,
-            clarifications=data.clarifications,
-            attempt=data.attempt,
-            previous_prompt=data.previous_prompt,
-            aspect_ratio=data.aspect_ratio,
-        )
+        brief=data.brief,
+        clarifications=data.clarifications,
+        attempt=data.attempt,
+        previous_prompt=data.previous_prompt,
+        # aspect_ratio=data.aspect_ratio,
+        image_url=data.image_url,
+    )
         return PromptResponse(prompt=prompt_text)
 
     except Exception as e:

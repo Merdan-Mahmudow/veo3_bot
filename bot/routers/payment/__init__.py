@@ -5,7 +5,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import LabeledPrice, PreCheckoutQuery
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-
+from bot.fsm import PaymentState
 from bot.api import BackendAPI
 from config import ENV
 env = ENV()
@@ -41,10 +41,9 @@ def payment_keyboard() -> types.InlineKeyboardMarkup:
 
 # ---------- Точка входа в оплату ----------
 
-@router.message(Command("payment"))
+@router.message(PaymentState.choosing_plan)
 async def payment_menu(message: types.Message, state: FSMContext):
     await message.answer("Выберите количество генераций:", reply_markup=payment_keyboard())
-
 
 # ---------- Выбор тарифа → инвойс ----------
 

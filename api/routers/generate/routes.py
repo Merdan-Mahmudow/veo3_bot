@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from api.database import get_async_session
 from api.routers.generate import get_veo_service
-from api.routers.generate.schema import CallbackOut, GenerateOut, GenerateTextIn, KIECallbackIn, StatusOut, VideoReadyIn
+from api.routers.generate.schema import CallbackOut, GenerateOut, GeneratePhotoIn, GenerateTextIn, KIECallbackIn, StatusOut, VideoReadyIn
 from api.security import require_bot_service
 from services.veo import VeoCallbackAuthError, VeoService, VeoServiceError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,23 +27,30 @@ async def generate_text(
 
 @router.post("/generate/photo", response_model=GenerateOut)
 async def generate_photo(
-    chat_id: str = Form(...),
-    prompt: str = Form(...),
-    image: UploadFile = File(...),
+    dto: GeneratePhotoIn,
     session: AsyncSession = Depends(get_async_session),
     svc: VeoService = Depends(get_veo_service),
 ):
-    content = await image.read()
-    ext = "." + image.filename.rsplit(".", 1)[-1].lower() if (image.filename and "." in image.filename) else ".jpg"
-
     try:
-        data = await svc.generate_by_photo(chat_id=chat_id, prompt=prompt, image_bytes=content, image_ext=ext, session=session)
-        return GenerateOut(ok=True, task_id=data["task_id"], input_image_url=data.get("input_image_url"), raw=data.get("raw"))
+        data = await svc.generate_by_photo(
+            chat_id=dto.chat_id,
+            prompt=dto.prompt,
+            image_url=dto.image_url,  
+            session=session
+        )
+        return GenerateOut(
+            ok=True,
+            task_id=data["task_id"],
+            input_image_url=data.get("input_image_url"),
+            raw=data.get("raw"),
+        )
     except VeoServiceError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except Exception:
+    except Exception as e:
+        # 502, как и раньше, сигнализирует об ошибке обращения к KIE
+        print(e)
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="KIE unavailable")
-
+  
 @router.get("/status/{task_id}", response_model=StatusOut)
 async def get_status(task_id: str, svc: VeoService = Depends(get_veo_service)):
     try:
