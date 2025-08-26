@@ -1,10 +1,8 @@
 from typing import Any, Dict
-from fastapi import Depends
 from sqlalchemy import insert, select, update, delete, func
 from .interface import UserInterface
 from sqlalchemy.ext.asyncio import AsyncSession
-from .schema import CoinMinus, CoinPlus, UserDelete, UserRead, UserRegister
-from api.database import get_async_session
+from .schema import CoinMinus, CoinPlus, UserDelete, UserRegister
 from api.models.user import User
 
 
@@ -13,7 +11,6 @@ class BusinessRuleError(Exception): ...
 
 
 class UserService(UserInterface):
-    """Бизнес-логика. Не знает про FastAPI и HTTP — только про данные и правила."""
     async def register_user(self, dto: UserRegister, session: AsyncSession) -> Dict[str, Any]:
         # пример: запретить дубли по chat_id
         exists = await session.scalar(select(func.count()).select_from(User).where(User.chat_id == dto.chat_id))

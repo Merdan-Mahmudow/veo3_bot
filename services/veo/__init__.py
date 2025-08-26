@@ -28,29 +28,29 @@ class VeoService:
         self.redis = redis
         self.notifier = notifier
 
-    async def generate_by_text(self, chat_id: str, prompt: str, session: AsyncSession) -> dict:
+    async def generate_by_text(self, chat_id: str, prompt: str, aspect_ratio: str, session: AsyncSession) -> dict:
         await self._charge_one_coin(chat_id, session)
         try:
-            resp = await self.gen.generate_video_by_text(prompt=prompt)
+            resp = await self.gen.generate_video_by_text(prompt=prompt, aspect_ratio=aspect_ratio)
             task_id = self._parse_task_id(resp)
             if not task_id:
                 raise VeoServiceError(f"KIE response has no taskId: {resp}")
-            await self.redis.set_task(task_id, chat_id, meta={"mode": "text", "prompt": prompt})
+            await self.redis.set_task(task_id, chat_id, meta={"mode": "text", "prompt": prompt, "aspect_ratio": aspect_ratio})
             return {"task_id": task_id, "raw": resp}
         except Exception:
             await self._refund_one_coin(chat_id, session)
             raise
 
-    async def generate_by_photo(self, chat_id: str, prompt: str, image_url: str | None, session: AsyncSession) -> dict:
+    async def generate_by_photo(self, chat_id: str, prompt: str, aspect_ratio: str, image_url: str | None, session: AsyncSession) -> dict:
         if image_url:
             input_url = image_url
         await self._charge_one_coin(chat_id, session)
         try:
-            resp = await self.gen.generate_video_by_photo(prompt=prompt, imageUrl=input_url)
+            resp = await self.gen.generate_video_by_photo(prompt=prompt, imageUrl=input_url, aspect_ratio=aspect_ratio)
             task_id = self._parse_task_id(resp)
             if not task_id:
                 raise VeoServiceError(f"KIE response has no taskId: {resp}")
-            await self.redis.set_task(task_id, chat_id, meta={"mode": "photo", "prompt": prompt, "input_image_url": input_url})
+            await self.redis.set_task(task_id, chat_id, meta={"mode": "photo", "prompt": prompt, "input_image_url": input_url, "aspect_ratio": aspect_ratio})
             return {"task_id": task_id, "raw": resp, "input_image_url": input_url}
         except Exception:
             await self._refund_one_coin(chat_id, session)

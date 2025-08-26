@@ -1,4 +1,4 @@
-from typing import Optional, Sequence
+from typing import List, Optional, Sequence
 from pydantic import BaseModel, Field
 
 class PromptRequest(BaseModel):
@@ -11,7 +11,7 @@ class PromptRequest(BaseModel):
     image_url: Optional[str] = None
     
 class PromptResponse(BaseModel):
-    prompt: str
+    prompt: List[str]
 
 class ChangeSystemPromptRequest(BaseModel):
     system_prompt: str = Field(..., description="Новый системный промпт для генерации")

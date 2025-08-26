@@ -17,10 +17,10 @@ class BotManager:
         self.add_routes()
 
     def add_routes(self):
-        self.dp.include_router(payment_router)
         # self.dp.include_router(prompts_router)
         if routers.router.parent_router is None:
             self.dp.include_router(routers.router)
+        self.dp.include_router(payment_router)
 
     async def bot_start(self):
         try:

@@ -5,6 +5,7 @@ from services.notifier import BotNotifier
 from services.redis import RedisClient
 from services.storage import YandexS3Storage
 from services.veo import VeoService
+from api.crud.task import TaskCRUD
 
 
 
@@ -13,6 +14,7 @@ def get_storage() -> YandexS3Storage: return YandexS3Storage()
 def get_kie_client() -> GenerateRequests: return GenerateRequests()
 def get_redis() -> RedisClient: return RedisClient()
 def get_notifier() -> BotNotifier: return BotNotifier()
+def get_task_crud() -> TaskCRUD: return TaskCRUD()
 
 def get_veo_service(
     users: UserService = Depends(get_user_service),

@@ -21,12 +21,12 @@ class GenerateRequests:
                     raise RuntimeError(f"KIE error: {data}")
                 return data
 
-    async def generate_video_by_text(self, prompt: str):
+    async def generate_video_by_text(self, prompt: str, aspect_ratio: str):
         url = "https://api.kie.ai/api/v1/veo/generate"
         payload = {
             "prompt": prompt, 
             "model": "veo3_fast", 
-            "aspectRatio": "16:9",
+            "aspectRatio": aspect_ratio,
             "callBackUrl": self.callback_url, 
             "enableFallback": False}
         headers = {"Content-Type": "application/json"}
@@ -37,13 +37,13 @@ class GenerateRequests:
         params = {"taskId": task_id}
         return await self._request("GET", url, params=params)
 
-    async def generate_video_by_photo(self, prompt: str, imageUrl: str):
+    async def generate_video_by_photo(self, prompt: str, imageUrl: str, aspect_ratio: str):
         url = "https://api.kie.ai/api/v1/veo/generate"
         payload = {
             "prompt": prompt, 
             "imageUrls": [imageUrl], 
             "model": "veo3_fast",
-            "aspectRatio": "16:9",
+            "aspectRatio": aspect_ratio,
             "callBackUrl": self.callback_url,
             "enableFallback": False, }
         headers = {"Content-Type": "application/json"}

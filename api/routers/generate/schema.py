@@ -8,11 +8,13 @@ from pydantic import BaseModel
 class GenerateTextIn(BaseModel):
     chat_id: str
     prompt: str
+    aspect_ratio: str
 
 class GeneratePhotoIn(BaseModel):
     chat_id: str
     prompt: str
     image_url: Optional[str] = None
+    aspect_ratio: str
 
 class GenerateOut(BaseModel):
     ok: bool

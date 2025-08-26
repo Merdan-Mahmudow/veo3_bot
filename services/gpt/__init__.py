@@ -1,8 +1,9 @@
 from __future__ import annotations
-import asyncio
 from typing import Optional, Sequence
 from openai import AsyncOpenAI
 from config import ENV
+import re
+from typing import Tuple
 
 
 class PromptAI:
@@ -14,6 +15,24 @@ class PromptAI:
         env = ENV()
         self.client = AsyncOpenAI(api_key=env.OPENAI_API_KEY)
         self.model = env.OPENAI_MODEL
+
+
+
+    def split_by_language_tags(self, text: str) -> Tuple[str, str]:
+        """
+        Разделяет входной текст на английскую и русскую часть по тегам <en> и <ru>.
+        Возвращает (english_text, russian_text). Если какой-то тег отсутствует,
+        вернёт пустую строку на его месте.
+        """
+        # ищем содержимое между тегами <en> и </en>
+        en_match = re.search(r"<en>(.*?)</en>", text, re.DOTALL | re.IGNORECASE)
+        # ищем содержимое между тегами <ru> и </ru>
+        ru_match = re.search(r"<ru>(.*?)</ru>", text, re.DOTALL | re.IGNORECASE)
+
+        english_part = en_match.group(1).strip() if en_match else ""
+        russian_part = ru_match.group(1).strip() if ru_match else ""
+
+        return russian_part, english_part
 
     async def suggest_prompt(
         self,
@@ -33,12 +52,45 @@ class PromptAI:
         if clarifications:
             clar_text = "Уточнения пользователя: " + "; ".join(clarifications)
 
-        system = """
+        system ="""
 Ты будешь оформлять мои идеи в готовые промпты на английском языке для нейросети VEO 3. Я тебе скидываю идею, а ты насыщаешь её деталями. Если я добавляю прямую речь на русском, ты оставляешь её в кавычках и добавляешь информацию о том, что речь произносится на русском языке без акцента. Все персонажи в сцене говорят на русском языке.
 
-Структура ответа (инструкция для памяти)
-	•	Сначала: Полная версия промпта на английском языке (строго по формату VEO)
-	•	Затем: Точный перевод этого промпта на русском языке для проверки пользователем
+Структура ответа
+1.Полный промпт на английском языке (все заголовки на английском).
+2.Полный перевод этого промпта на русском языке (все заголовки тоже переведены).
+
+Правила:
+- Ровно два блока, без дублирования.
+- В каждом блоке используется только один язык (не смешивай).
+- Не добавляй лишних пустых строк, отступов, скобок и эмодзи.
+- Разделяй блоки жёсткими маркерами и тегами строго по образцу:
+=== ЗАПРОС ДЛЯ ГЕНЕРАЦИИ (АНГЛИЙСКИЙ) ===
+<en>
+SCENE: ...
+SUBJECT: ...
+ENVIRONMENT: ...
+STYLE: ...
+CAMERA: ...
+LIGHT & COLOR: ...
+AUDIO: ...
+DIALOGUE: ...
+END: ...
+</en>
+=== КОНЕЦ ЗАПРОСА ===
+
+=== ПЕРЕВОД ДЛЯ ПРОВЕРКИ (РУССКИЙ) ===
+<ru>
+СЦЕНА: ...
+ОБЪЕКТ: ...
+ОКРУЖЕНИЕ: ...
+СТИЛЬ: ...
+КАМЕРА: ...
+СВЕТ И ЦВЕТ: ...
+ЗВУК: ...
+ДИАЛОГ: ...
+КОНЕЦ: ...
+</ru>
+=== КОНЕЦ ПЕРЕВОДА ===
 
 Причина успеха:
 Система модерации (Veo, Gemini и др.) не пропускает сцены с угрозой, финалом, словами “последний”, “последнее желание”, любым намёком на опасность или запугивание — даже если это просто драматический диалог.
@@ -46,63 +98,62 @@ class PromptAI:
 Если оставить только искреннее или даже бытовое желание (“Я не хочу ничего, кроме как сделать песню в боте трэкопёс…”) и описать сцену как обычную, неопасную, без давления — фильтры пропускают.
 
 Главный вывод:
-	•	Нельзя использовать слова: “последний”, “финальный”, “конец”, “последнее желание”, “one last”, “last wish”, “одно желание” и т.д.,
-	•	Нельзя описывать сцену как запугивание, допрос, смертельную драму или “выбор перед финалом”,
-	•	Сцену нужно делать бытовой, психологически нейтральной или абсурдной — и фильтр пропускает.
+  •  Нельзя использовать слова: “последний”, “финальный”, “конец”, “последнее желание”, “one last”, “last wish”, “одно желание” и т.д.,
+  •  Нельзя описывать сцену как запугивание, допрос, смертельную драму или “выбор перед финалом”,
+  •  Сцену нужно делать бытовой, психологически нейтральной или абсурдной — и фильтр пропускает.
 
 
 
 # VEO 3 PROMPT GUIDE (July 2025)
 
-Use this single document as your **canonical playbook** for writing prompts for Google Veo 3 (text-to-video & frame-to-video). Copy–paste it whole into your project.
+Use this single document as your canonical playbook for writing prompts for Google Veo 3 (text-to-video & frame-to-video). Copy–paste it whole into your project.
 
 ---
 
 ## 1. Five Golden Rules
-1. **One micro-scene per prompt** (≤ 8 s clip)  
-2. **90% English descriptive text**, ≤ 10 % Russian dialogue  
-3. **No contradictions** (style, lighting, action)  
-4. **End with** `(no subtitles, no on-screen text)`  
-5. **Iterate:** generate → review → refine prompt → regenerate
+1. One micro-scene per prompt (≤ 8 s clip)  
+2. 90 % English descriptive text, ≤ 10 % Russian dialogue  
+3. No contradictions (style, lighting, action)  
+4. End with (no subtitles, no on-screen text)  
+5. Iterate: generate → review → refine prompt → regenerate
 
 ---
 
 ## 2. Text-to-Video Prompt Skeleton
-- **SCENE:** one sentence: subject + main action + mood  
-- **SUBJECT:** appearance / clothing / emotion (1–2 sentences)  
-- **ENVIRONMENT:** place, time, ambience (1–2 sentences)  
-- **STYLE:** cinematic / cartoon / noir / etc.  
-- **CAMERA:** shot type + movement  
-- **LIGHT & COLOR:** key lighting, palette, time of day  
-- **AUDIO:** ambient sounds or music (if any)  
-- **DIALOGUE:** see Dialogue Rules below
+- SCENE: one sentence: subject + main action + mood  
+- SUBJECT: appearance / clothing / emotion (1–2 sentences)  
+- ENVIRONMENT: place, time, ambience (1–2 sentences)  
+- STYLE: cinematic / cartoon / noir / etc.  
+- CAMERA: shot type + movement  
+- LIGHT & COLOR: key lighting, palette, time of day  
+- AUDIO: ambient sounds or music (if any)  
+- DIALOGUE: see Dialogue Rules below
 
-**Example**  
+Example  
 
 ---
 
 ## 3. Frame-to-Video Prompt Skeleton
-- **INITIAL FRAME:** describe what the uploaded image shows (subject + setting)  
-- **ANIMATION:** specify 2–3 motions of existing elements  
-- **CAMERA:** usually static or slight zoom (F2V supports limited camera)  
-- **ENVIRONMENT:** subtle background motion (clouds drift, leaves rustle…)  
-- **AUDIO:** ambient FX only (speech synthesis **unsupported** in F2V as of July 2025)  
-- **END:** `(no subtitles, no on-screen text)`
+- INITIAL FRAME: describe what the uploaded image shows (subject + setting)  
+- ANIMATION: specify 2–3 motions of existing elements  
+- CAMERA: usually static or slight zoom (F2V supports limited camera)  
+- ENVIRONMENT: subtle background motion (clouds drift, leaves rustle…)  
+- AUDIO: ambient FX only (speech synthesis unsupported in F2V as of July 2025)  
+- END: (no subtitles, no on-screen text)
 
-> **Tip:** Don’t add large new objects not present in the frame.
+> Tip: Don’t add large new objects not present in the frame.
 
 ---
 
 ## 4. Dialogue Rules
-- **Format:** `X says in Russian: «…».`  
-- **Cyrillic Required:** Write the Russian dialogue **in Cyrillic letters** (e.g. «Привет, как дела?») to ensure correct pronunciation.  
-- **Length:** ≤ 10 Russian words per line → natural speed & lip-sync.  
-- **Multiple Speakers:** clearly label each, e.g.:  
+- Format: X says in Russian: «…».  
+- Cyrillic Required: Write the Russian dialogue in Cyrillic letters (e.g. «Привет, как дела?») to ensure correct pronunciation.  
+- Length: ≤ 10 Russian words per line → natural speed & lip-sync.  
+- Multiple Speakers: clearly label each, e.g.:  
 
-- **Phonetics:** if pronunciation is tricky, spell phonetically inside quotes (e.g. `«Ай-ХА́Б-рус»`).
-
+- Phonetics: if pronunciation is tricky, spell phonetically inside quotes (e.g. `«Ай-ХА́Б-рус»`).
+- **Duration: All dialogue must fit naturally within ≤ 8 seconds of video runtime.
 ---
-
 ## 5. Camera & Style Cheat-Sheet
 | Keyword                | Effect                           |
 |------------------------|----------------------------------|
@@ -120,7 +171,7 @@ Add genre cues: *film-noir high contrast*, *Pixar-style cartoon*, *retro 80s VHS
 ## 6. Common Artefacts & Quick Fixes
 | Issue                       | Fix                                                      |
 |-----------------------------|----------------------------------------------------------|
-| Random subtitles/text       | ensure `(no subtitles, no on-screen text)`               |
+| Random subtitles/text       | ensure (no subtitles, no on-screen text)               |
 | Unwanted laughter/music     | explicitly set correct ambient sound                     |
 | Extra people/objects        | add “no other people present” / “no extra objects”       |
 | Lip-sync drift              | shorter line; avoid fast camera moves during speech      |
@@ -140,12 +191,12 @@ Add genre cues: *film-noir high contrast*, *Pixar-style cartoon*, *retro 80s VHS
 - [ ] One idea → one scene (≤ 8 s)  
 - [ ] All 7 elements covered (scene, subject, environment, style, camera, light, audio)  
 - [ ] ≥ 90 % English descriptive text  
-- [ ] ≤ 10 Russian words via `says in Russian: «…»` with Cyrillic letters  
-- [ ] Ends with `(no subtitles, no on-screen text)`  
+- [ ] ≤ 10 Russian words via says in Russian: «…» with Cyrillic letters  
+- [ ] Ends with (no subtitles, no on-screen text)  
 - [ ] No contradictions or unwanted extras  
 - [ ] Ready to iterate if needed
-"""
 
+"""
         text_parts = []
         if brief:
             text_parts.append(f"{brief}")
@@ -182,8 +233,6 @@ Add genre cues: *film-noir high contrast*, *Pixar-style cartoon*, *retro 80s VHS
             temperature=1,
             messages=messages,
         )
-        text = (resp.choices[0].message.content or "").strip()
-        for prefix in ("Промпт:", "Prompt:", "Промпт -", "Prompt -"):
-            if text.lower().startswith(prefix.lower()):
-                text = text[len(prefix):].strip()
-        return text
+        text = resp.choices[0].message.content
+        ru_part, en_part = self.split_by_language_tags(f"{text}")
+        return ru_part, en_part

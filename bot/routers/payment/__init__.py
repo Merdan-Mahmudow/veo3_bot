@@ -39,12 +39,6 @@ def payment_keyboard() -> types.InlineKeyboardMarkup:
     return kb.as_markup()
 
 
-# ---------- Точка входа в оплату ----------
-
-@router.message(PaymentState.choosing_plan)
-async def payment_menu(message: types.Message, state: FSMContext):
-    await message.answer("Выберите количество генераций:", reply_markup=payment_keyboard())
-
 # ---------- Выбор тарифа → инвойс ----------
 
 @router.callback_query(F.data.startswith("pay_gens:"))

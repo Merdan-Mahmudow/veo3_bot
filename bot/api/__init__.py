@@ -203,8 +203,8 @@ class BackendAPI:
         return int(resp.json().get("coins", 0))
     
 
-    async def generate_text(self, chat_id: int, prompt: str) -> dict:
-        payload = {"chat_id": chat_id, "prompt": prompt}
+    async def generate_text(self, chat_id: int, prompt: str, aspect_ratio: str = "16:9") -> dict:
+        payload = {"chat_id": chat_id, "prompt": prompt, "aspect_ratio": aspect_ratio}
         resp = await self._request("POST", "/bot/veo/generate/text", json=payload, expected=(200,))
         return resp.json()
 
@@ -216,18 +216,19 @@ class BackendAPI:
         file_bytes: bytes | None = None,
         image_url: str | None = None,
         filename: str = "image.jpg",
+        aspect_ratio: str = "16:9",
     ) -> dict:
         client = await self._ensure_client()
 
         if image_url:
             # если URL уже есть, отправляем JSON без файлов
-            payload = {"chat_id": str(chat_id), "prompt": prompt, "image_url": image_url}
+            payload = {"chat_id": str(chat_id), "prompt": prompt, "image_url": image_url, "aspect_ratio": aspect_ratio}
             print(payload)
             resp = await self._request("POST", "/bot/veo/generate/photo", json=payload, expected=(200, 400, 401))
         else:
             # иначе отправляем multipart с байтами изображения
             files = {"image": (filename, file_bytes)}
-            data = {"chat_id": str(chat_id), "prompt": prompt}
+            data = {"chat_id": str(chat_id), "prompt": prompt, "aspect_ratio": aspect_ratio}
             resp = await self._request("POST", "/bot/veo/generate/photo", json=data, files=files, expected=(200, 400, 401))
 
         if resp.status_code == 200:
@@ -259,4 +260,6 @@ class BackendAPI:
         }
         resp = await self._request("POST", f"{self.base_url}/prompt/suggest", json=payload)
         data = resp.json()
+        data_prompt = data["prompt"]
+        print(data_prompt)
         return data["prompt"]
