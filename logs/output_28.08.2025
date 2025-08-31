@@ -1,0 +1,71 @@
+nohup: ignoring input
+INFO:     Started server process [58164]
+INFO:     Waiting for application startup.
+ERROR:    Traceback (most recent call last):
+  File "/root/veo3_bot/.venv/lib/python3.12/site-packages/starlette/routing.py", line 694, in lifespan
+    async with self.lifespan_context(app) as maybe_state:
+  File "/usr/lib/python3.12/contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/root/veo3_bot/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 134, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+  File "/usr/lib/python3.12/contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/root/veo3_bot/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 134, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+  File "/usr/lib/python3.12/contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/root/veo3_bot/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 134, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+  File "/usr/lib/python3.12/contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/root/veo3_bot/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 134, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+  File "/usr/lib/python3.12/contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/root/veo3_bot/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 134, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+  File "/usr/lib/python3.12/contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/root/veo3_bot/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 134, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+  File "/usr/lib/python3.12/contextlib.py", line 210, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/root/veo3_bot/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 134, in merged_lifespan
+    async with original_context(app) as maybe_original_state:
+  File "/root/veo3_bot/.venv/lib/python3.12/site-packages/starlette/routing.py", line 571, in __aenter__
+    await self._router.startup()
+  File "/root/veo3_bot/.venv/lib/python3.12/site-packages/starlette/routing.py", line 671, in startup
+    await handler()
+  File "/root/veo3_bot/api/routers/system/routes.py", line 21, in startup
+    await bot_manager.bot_start()
+  File "/root/veo3_bot/bot/bot/__init__.py", line 27, in bot_start
+    await self.bot.set_webhook(self.webhook_endpoint)
+  File "/root/veo3_bot/.venv/lib/python3.12/site-packages/aiogram/client/bot.py", line 3713, in set_webhook
+    return await self(call, request_timeout=request_timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/veo3_bot/.venv/lib/python3.12/site-packages/aiogram/client/bot.py", line 482, in __call__
+    return await self.session(self, method, timeout=request_timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/veo3_bot/.venv/lib/python3.12/site-packages/aiogram/client/session/base.py", line 254, in __call__
+    return cast(TelegramType, await middleware(bot, method))
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/veo3_bot/.venv/lib/python3.12/site-packages/aiogram/client/session/aiohttp.py", line 185, in make_request
+    response = self.check_response(
+               ^^^^^^^^^^^^^^^^^^^^
+  File "/root/veo3_bot/.venv/lib/python3.12/site-packages/aiogram/client/session/base.py", line 120, in check_response
+    raise TelegramBadRequest(method=method, message=description)
+aiogram.exceptions.TelegramBadRequest: Telegram server says - Bad Request: bad webhook: Failed to resolve host: Temporary failure in name resolution
+
+ERROR:    Application startup failed. Exiting.
+Unclosed client session
+client_session: <aiohttp.client.ClientSession object at 0x7e1d2739a990>
+Unclosed connector
+connections: ['deque([(<aiohttp.client_proto.ResponseHandler object at 0x7e1d273a1c10>, 265038.765858465)])']
+connector: <aiohttp.connector.TCPConnector object at 0x7e1d2739a9c0>

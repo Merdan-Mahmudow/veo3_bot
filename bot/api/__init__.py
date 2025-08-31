@@ -263,3 +263,6 @@ class BackendAPI:
         data_prompt = data["prompt"]
         print(data_prompt)
         return data["prompt"]
+
+    async def rate_task(self, task_id: str, rating: int) -> None:
+        await self._request("PATCH", f"/tasks/{task_id}/rating?rating={rating}", expected=(200,204))

@@ -4,8 +4,8 @@ from datetime import datetime
 import uuid
 
 class TaskCreate(BaseModel):
-    task_id: str
-    chat_id: str
+    task_id: Optional[str]
+    chat_id: Optional[str]
     raw: Optional[str]
     is_video: bool = False
     rating: Optional[int] = None

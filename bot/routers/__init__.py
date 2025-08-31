@@ -1,8 +1,7 @@
 import asyncio
 from contextlib import suppress
-from io import BytesIO
 import logging
-from typing import Optional, Sequence
+from typing import Dict, TypedDict
 
 from aiogram import Router, types, F, Bot
 from aiogram.filters.command import Command
@@ -13,11 +12,14 @@ from bot import fsm
 from bot.api import BackendAPI
 from config import ENV
 from services.storage import YandexS3Storage
+from utils.progress import PROGRESS, show_progress
+
 
 router = Router()
 env = ENV()
 backend = BackendAPI(env.bot_api_token)
 storage = YandexS3Storage()
+
 
 # --- Клавиатуры ---
 
@@ -66,39 +68,15 @@ def sent_prompt_kb():
     kb.adjust(1, 1, 1)
     return kb.as_markup()
 
-# --- Прогресс‑бар ---
-
-async def show_progress(bot: Bot, chat_id: int, message_id: int, stage: str):
-    if stage == "prompt":
-        stages = [
-            ("5%",  "🟡⚫️⚫️⚫️⚫️⚫️⚫️⚫️⚫️⚫️ 5%",  "Читаю идею, ловлю суть."),
-            ("15%", "🟡🟡⚫️⚫️⚫️⚫️⚫️⚫️⚫️⚫️ 15%", "Разбираю: кто/что/где/стиль."),
-            ("30%", "🟡🟡🟡⚫️⚫️⚫️⚫️⚫️⚫️⚫️ 30%", "Собираю структуру, убираю воду."),
-            ("60%", "🟡🟡🟡🟡🟡🟡⚫️⚫️⚫️⚫️ 60%", "Шлифую формулировку, стыкую логику."),
-            ("95%", "🟡🟡🟡🟡🟡🟡🟡🟡🟡⚫️ 95%", "Упаковываю финальный промпт."),
-        ]
-        delay = 10
-    else:  # stage == "video"
-        stages = [
-            ("5%",  "🟡⚫️⚫️⚫️⚫️⚫️⚫️⚫️⚫️⚫️ 5%",  "Отправил на генерацию. Готовлю сцену."),
-            ("15%", "🟡🟡⚫️⚫️⚫️⚫️⚫️⚫️⚫️⚫️ 15%", "Собираю кадры и движение."),
-            ("30%", "🟡🟡🟡⚫️⚫️⚫️⚫️⚫️⚫️⚫️ 30%", "Добавляю свет, цвет, вайб."),
-            ("60%", "🟡🟡🟡🟡🟡🟡⚫️⚫️⚫️⚫️ 60%", "Сглаживаю артефакты, финальные стыки."),
-            ("95%", "🟡🟡🟡🟡🟡🟡🟡🟡🟡⚫️ 95%", "Готовлю ссылку. Ещё мгновение…"),
-        ]
-        delay = 30
-
-    for percent, bar, note in stages:
-        text = f"{percent}\n{bar}\n{note}"
-        await bot.edit_message_text(text, chat_id=chat_id, message_id=message_id)
-        await asyncio.sleep(delay)
 
 # --- Команда /start и возвращение в начало ---
 
 @router.message(Command("start"))
 async def command_start(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
-    # регистрация и получение баланса (опущены для краткости)
+    nickname = message.from_user.username
+    # регистрация и получение баланса
+    await backend.ensure_user(str(user_id), nickname)
     coins = await backend.get_coins(user_id)
 
     await state.clear()
@@ -179,9 +157,12 @@ async def handle_text_description(message: types.Message, state: FSMContext):
         await message.answer("Не удалось получить промпт. Попробуйте ещё раз.")
         return
     finally:
-        progress_task.cancel()
-        with suppress(asyncio.CancelledError):
-            await progress_task
+        # прекращаем прогресс, когда запрос завершился
+        with suppress(Exception):
+            progress_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await progress_task
+            
 
     await state.update_data(
         prompt_brief=brief,
@@ -237,9 +218,12 @@ async def handle_photo(message: types.Message, state: FSMContext):
         await message.answer("Не удалось получить промпт. Попробуйте ещё раз.")
         return
     finally:
-        progress_task.cancel()
-        with suppress(asyncio.CancelledError):
-            await progress_task
+        # прекращаем прогресс, когда запрос завершился
+        with suppress(Exception):
+            progress_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await progress_task
+            
 
     await state.update_data(prompt_last=en_text)
     await progress_msg.edit_text(f"`{ru_text}`", parse_mode="Markdown", reply_markup=prompt_options_kb())
@@ -265,11 +249,11 @@ async def prompt_other(callback: types.CallbackQuery, state: FSMContext):
     await callback.answer("Готовлю новый вариант…", show_alert=False)
 
     # сообщение, в которое будем писать прогресс
-    loading_msg = await callback.message.answer("⏳ Получаю новый вариант…")
+    progress_msg = await callback.message.answer("⏳ Получаю новый вариант…")
 
     # запускаем прогресс‑бар параллельно
     progress_task = asyncio.create_task(
-        show_progress(callback.bot, callback.from_user.id, loading_msg.message_id, stage="prompt")
+        show_progress(callback.bot, callback.from_user.id, progress_msg.message_id, stage="prompt")
     )
 
     try:
@@ -283,18 +267,21 @@ async def prompt_other(callback: types.CallbackQuery, state: FSMContext):
         )
     except Exception as e:
         logging.exception("Ошибка получения нового варианта: %s", e)
-        await loading_msg.edit_text("❌ Не удалось получить новый вариант. Попробуйте ещё раз.")
+        await progress_msg.edit_text("❌ Не удалось получить новый вариант. Попробуйте ещё раз.")
         return
     finally:
-        progress_task.cancel()
-        with suppress(asyncio.CancelledError):
-            await progress_task
+        # прекращаем прогресс, когда запрос завершился
+        with suppress(Exception):
+            progress_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await progress_task
+            
 
     # сохраняем обновлённые данные
     await state.update_data(prompt_last=en_text, prompt_attempt=attempt)
 
     # обновляем сообщение с вариантом
-    await loading_msg.edit_text(
+    await progress_msg.edit_text(
         f"Вариант #{attempt}:\n\n`{ru_text}`",
         parse_mode="Markdown",
         reply_markup=prompt_options_kb()
@@ -322,9 +309,9 @@ async def prompt_receive_edit(message: types.Message, state: FSMContext):
     attempt = int(data.get("prompt_attempt", 1)) + 1
 
     # отправляем сообщение о загрузке и запускаем прогресс‑бар
-    loading_msg = await message.answer("⏳ Собираю новый вариант с учётом правок…")
+    progress_msg = await message.answer("⏳ Собираю новый вариант с учётом правок…")
     progress_task = asyncio.create_task(
-        show_progress(message.bot, message.chat.id, loading_msg.message_id, stage="prompt")
+        show_progress(message.bot, message.chat.id, progress_msg.message_id, stage="prompt")
     )
 
     try:
@@ -337,18 +324,20 @@ async def prompt_receive_edit(message: types.Message, state: FSMContext):
         )
     except Exception as e:
         logging.exception("Ошибка получения варианта с правками: %s", e)
-        await loading_msg.edit_text("❌ Не удалось получить новый вариант. Попробуйте ещё раз.")
+        await progress_msg.edit_text("❌ Не удалось получить новый вариант. Попробуйте ещё раз.")
         return
     finally:
         # прекращаем прогресс, когда запрос завершился
-        progress_task.cancel()
-        with suppress(asyncio.CancelledError):
-            await progress_task
+        with suppress(Exception):
+            progress_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await progress_task
+            
 
     # обновляем данные в FSM
     await state.update_data(prompt_clarifications=clar, prompt_last=en_text, prompt_attempt=attempt)
     # заменяем текст сообщения на новый вариант
-    await loading_msg.edit_text(
+    await progress_msg.edit_text(
         f"Вариант #{attempt}:\n\n`{ru_text}`",
         parse_mode="Markdown",
         reply_markup=prompt_options_kb()
@@ -394,6 +383,8 @@ async def aspect_ratio_chosen(callback: types.CallbackQuery, state: FSMContext):
                 prompt=prompt_text,
                 aspect_ratio=aspect_ratio,
             )
+
+        task_id = task["task_id"]
         coins = await backend.get_coins(callback.from_user.id)
         await callback.message.answer(
             f"🚀 Приступил к генерации видео.\nОстаток: {coins}.\n"
@@ -404,11 +395,22 @@ async def aspect_ratio_chosen(callback: types.CallbackQuery, state: FSMContext):
         # запускаем прогресс‑бар для генерации видео
         progress_msg = await callback.message.answer("⏳ Генерирую видео…")
         progress_task = asyncio.create_task(show_progress(callback.bot, callback.from_user.id, progress_msg.message_id, stage="video"))
+        PROGRESS[task_id] = {
+            "task": progress_task,
+            "chat_id": callback.message.chat.id,
+            "message_id": progress_msg.message_id,
+        }
     except Exception as e:
         logging.exception("Ошибка запуска генерации: %s", e)
         await callback.message.answer("❌ Не удалось запустить генерацию.")
         return
-
+    finally:
+        # прекращаем прогресс, когда запрос завершился
+        with suppress(Exception):
+            progress_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await progress_task
+                
 # --- Повтор и новый запрос ---
 
 @router.callback_query(F.data == "repeat_generation")
@@ -438,14 +440,22 @@ async def on_repeat_generation(callback: types.CallbackQuery, state: FSMContext)
                 aspect_ratio=aspect_ratio,
             )
         await callback.message.answer(
-            f"Повторная генерация запущена! ID задачи: `{task.get('task_id')}`",
+            f"Повторная генерация запущена!",
             parse_mode="Markdown"
         )
+        # запускаем прогресс‑бар для генерации видео
+        progress_msg = await callback.message.answer("⏳ Генерирую видео…")
+        progress_task = asyncio.create_task(show_progress(callback.bot, callback.from_user.id, progress_msg.message_id, stage="video"))
     except Exception as e:
         logging.exception("Ошибка повторной генерации: %s", e)
         await callback.message.answer("❌ Не удалось запустить повтор.")
     finally:
-        await callback.answer()
+        # прекращаем прогресс, когда запрос завершился
+        with suppress(Exception):
+            progress_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await progress_task
+        
 
 @router.callback_query(F.data == "new_generation")
 async def on_new_generation(callback: types.CallbackQuery, state: FSMContext):
@@ -455,3 +465,24 @@ async def on_new_generation(callback: types.CallbackQuery, state: FSMContext):
         "Начинаем заново.\n\nШаг 1/3. Выбери способ создания видео:",
         reply_markup=start_keyboard()
     )
+
+
+
+
+@router.callback_query(F.data.startswith("rate:"))
+async def on_rate(callback: types.CallbackQuery, state: FSMContext):
+    try:
+        _, task_id, rating_str = callback.data.split(":")
+        rating = int(rating_str)
+        if rating < 1 or rating > 5:
+            raise ValueError("rating must be 1-5")
+    except Exception:
+        await callback.answer("Неверный формат оценки", show_alert=True)
+        return
+
+    try:
+        await backend.rate_task(task_id, rating)
+        await callback.answer(f"Спасибо за оценку {"⭐" * rating}!", show_alert=True)
+    except Exception as e:
+        logging.exception("Ошибка отправки оценки: %s", e)
+        await callback.answer("Не удалось отправить оценку", show_alert=True)

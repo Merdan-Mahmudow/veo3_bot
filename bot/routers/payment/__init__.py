@@ -1,7 +1,5 @@
 from __future__ import annotations
-import json
 from aiogram import Router, types, F
-from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import LabeledPrice, PreCheckoutQuery
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -38,6 +36,15 @@ def payment_keyboard() -> types.InlineKeyboardMarkup:
     kb.adjust(1, 1, 1, 1)
     return kb.as_markup()
 
+
+@router.callback_query(F.data == "buy_coins")
+async def buy_coins_start(callback: types.CallbackQuery, state: FSMContext):
+    await state.set_state(PaymentState.choosing_plan)
+    await callback.message.answer(
+        "Выберите тариф для пополнения баланса генераций:",
+        reply_markup=payment_keyboard()
+    )
+    await callback.answer()
 
 # ---------- Выбор тарифа → инвойс ----------
 
@@ -109,6 +116,11 @@ def expected_amount_from_payload(payload: str) -> tuple[int, int] | None:
         pass
     return None
 
+def back_to_start():
+    kb = InlineKeyboardBuilder()
+    kb.button(text="На главную", callback_data="start_back")
+    return kb.as_markup()
+
 @router.message(F.successful_payment)
 async def successful_payment(message: types.Message):
     sp = message.successful_payment
@@ -116,7 +128,6 @@ async def successful_payment(message: types.Message):
     total = sp.total_amount
     currency = sp.currency
 
-    # Защита от повторного засчёта
     payment_id = sp.telegram_payment_charge_id or sp.provider_payment_charge_id or f"{message.chat.id}:{payload}:{total}"
     if payment_id in _processed_payments:
         await message.answer("Оплата уже учтена ✅")
@@ -144,6 +155,7 @@ async def successful_payment(message: types.Message):
 
     await message.answer(
         f"💳 Оплата успешно проведена!\n"
-        f"➕ Начислено: {coins} генераций\n"
-        f"💼 Текущий баланс: {new_coins} генераций"
+        f"➕ Начислено генераций: {coins}\n"
+        f"💼 Текущий баланс: {new_coins} генераций",
+        reply_markup=back_to_start() 
     )
