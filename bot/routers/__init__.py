@@ -142,7 +142,7 @@ async def handle_text_description(message: types.Message, state: FSMContext):
 
     # запускаем прогресс‑индикатор
     progress_msg = await message.answer("⏳ Собираю промпт…")
-    progress_task = asyncio.create_task(show_progress(message.bot, message.chat.id, progress_msg.message_id, stage="prompt"))
+    progress_task = asyncio.create_task(show_progress(progress_msg, stage="prompt"))
 
     try:
         ru_text, en_text = await backend.suggest_prompt(
@@ -159,7 +159,6 @@ async def handle_text_description(message: types.Message, state: FSMContext):
     finally:
         # прекращаем прогресс, когда запрос завершился
         with suppress(Exception):
-            progress_task.cancel()
             with suppress(asyncio.CancelledError):
                 await progress_task
             
@@ -201,7 +200,7 @@ async def handle_photo(message: types.Message, state: FSMContext):
 
     # запускаем прогресс‑индикатор
     progress_msg = await message.answer("⏳ Анализирую фото и собираю промпт…")
-    progress_task = asyncio.create_task(show_progress(message.bot, message.chat.id, progress_msg.message_id, stage="prompt"))
+    progress_task = asyncio.create_task(show_progress(progress_msg, stage="prompt"))
 
     try:
         # генерируем промпт, передав image_url в backend
@@ -220,7 +219,6 @@ async def handle_photo(message: types.Message, state: FSMContext):
     finally:
         # прекращаем прогресс, когда запрос завершился
         with suppress(Exception):
-            progress_task.cancel()
             with suppress(asyncio.CancelledError):
                 await progress_task
             
@@ -253,7 +251,7 @@ async def prompt_other(callback: types.CallbackQuery, state: FSMContext):
 
     # запускаем прогресс‑бар параллельно
     progress_task = asyncio.create_task(
-        show_progress(callback.bot, callback.from_user.id, progress_msg.message_id, stage="prompt")
+        show_progress(progress_msg, stage="prompt")
     )
 
     try:
@@ -263,7 +261,6 @@ async def prompt_other(callback: types.CallbackQuery, state: FSMContext):
             clarifications=clar,
             attempt=attempt,
             previous_prompt=last,
-            # aspect_ratio="16:9",
         )
     except Exception as e:
         logging.exception("Ошибка получения нового варианта: %s", e)
@@ -272,7 +269,6 @@ async def prompt_other(callback: types.CallbackQuery, state: FSMContext):
     finally:
         # прекращаем прогресс, когда запрос завершился
         with suppress(Exception):
-            progress_task.cancel()
             with suppress(asyncio.CancelledError):
                 await progress_task
             
@@ -311,7 +307,7 @@ async def prompt_receive_edit(message: types.Message, state: FSMContext):
     # отправляем сообщение о загрузке и запускаем прогресс‑бар
     progress_msg = await message.answer("⏳ Собираю новый вариант с учётом правок…")
     progress_task = asyncio.create_task(
-        show_progress(message.bot, message.chat.id, progress_msg.message_id, stage="prompt")
+        show_progress(progress_msg, stage="prompt")
     )
 
     try:
@@ -329,7 +325,6 @@ async def prompt_receive_edit(message: types.Message, state: FSMContext):
     finally:
         # прекращаем прогресс, когда запрос завершился
         with suppress(Exception):
-            progress_task.cancel()
             with suppress(asyncio.CancelledError):
                 await progress_task
             
@@ -394,7 +389,7 @@ async def aspect_ratio_chosen(callback: types.CallbackQuery, state: FSMContext):
         )
         # запускаем прогресс‑бар для генерации видео
         progress_msg = await callback.message.answer("⏳ Генерирую видео…")
-        progress_task = asyncio.create_task(show_progress(callback.bot, callback.from_user.id, progress_msg.message_id, stage="video"))
+        progress_task = asyncio.create_task(show_progress(progress_msg, stage="video"))
         PROGRESS[task_id] = {
             "task": progress_task,
             "chat_id": callback.message.chat.id,
@@ -407,7 +402,6 @@ async def aspect_ratio_chosen(callback: types.CallbackQuery, state: FSMContext):
     finally:
         # прекращаем прогресс, когда запрос завершился
         with suppress(Exception):
-            progress_task.cancel()
             with suppress(asyncio.CancelledError):
                 await progress_task
                 
@@ -445,27 +439,24 @@ async def on_repeat_generation(callback: types.CallbackQuery, state: FSMContext)
         )
         # запускаем прогресс‑бар для генерации видео
         progress_msg = await callback.message.answer("⏳ Генерирую видео…")
-        progress_task = asyncio.create_task(show_progress(callback.bot, callback.from_user.id, progress_msg.message_id, stage="video"))
+        progress_task = asyncio.create_task(show_progress(progress_msg, stage="video"))
     except Exception as e:
         logging.exception("Ошибка повторной генерации: %s", e)
         await callback.message.answer("❌ Не удалось запустить повтор.")
     finally:
-        # прекращаем прогресс, когда запрос завершился
         with suppress(Exception):
-            progress_task.cancel()
             with suppress(asyncio.CancelledError):
                 await progress_task
         
 
 @router.callback_query(F.data == "new_generation")
 async def on_new_generation(callback: types.CallbackQuery, state: FSMContext):
-    await callback.answer()
     await state.clear()
     await callback.message.answer(
         "Начинаем заново.\n\nШаг 1/3. Выбери способ создания видео:",
         reply_markup=start_keyboard()
     )
-
+    await callback.answer()
 
 
 

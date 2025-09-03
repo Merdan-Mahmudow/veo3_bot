@@ -31,7 +31,7 @@ class BotNotifier:
         })
         if not self.url:
             return
-        headers = {"Content-Type": "application/json"}
+        headers = {"Content-Type": "application/json", "X-API-KEY": self.env.bot_api_token}
         payload = {
             "chat_id": str(chat_id),
             "task_id": task_id,

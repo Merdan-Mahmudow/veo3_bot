@@ -219,6 +219,8 @@ async def veo_complete(
     try:
         res = await svc.handle_callback(payload.model_dump())
         task_dto = TaskCreate(
+            task_id=None,
+            chat_id=None,
             raw=json.dumps(payload.model_dump()),
         )
         await task.create_task(task_dto, session=None)
