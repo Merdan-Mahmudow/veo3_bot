@@ -1,4 +1,6 @@
 from __future__ import annotations
+from datetime import datetime
+import json
 from typing import List, Optional, TypedDict
 import asyncio
 import httpx
@@ -266,3 +268,51 @@ class BackendAPI:
 
     async def rate_task(self, task_id: str, rating: int) -> None:
         await self._request("PATCH", f"/tasks/{task_id}/rating?rating={rating}", expected=(200,204))
+
+    async def save_task(
+        self,
+        task_id: str,
+        chat_id: str,
+        raw: dict,
+        *,
+        is_video: bool = False,
+        rating: int | None = 0,
+    ) -> None:
+        """
+        Сохраняет запись о задаче в БД бэкенда. Словарь raw будет сериализован в JSON.
+        """
+        payload = {
+            "task_id": task_id,
+            "chat_id": chat_id,
+            "raw": json.dumps(raw),
+            "is_video": is_video,
+            "rating": rating,
+            "created_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        # POST /tasks вернёт 201 Created, тело нам не нужно
+        await self._request("POST", "/tasks/", json=payload, expected=(201,))
+
+    async def get_task(self, task_id: str) -> dict:
+        """
+        Получает запись о задаче из БД по её task_id. Возвращает словарь вида:
+        {
+           "id": "...",
+           "task_id": "...",
+           "chat_id": "...",
+           "raw": "<json string>",
+           "is_video": true,
+           "rating": 0,
+           "created_at": "YYYY‑MM‑DD HH:MM:SS"
+        }
+        """
+        resp = await self._request("GET", f"/tasks/{task_id}", expected=(200,))
+        return resp.json()
+    
+    async def get_sbp_url(self, amount: str, desc: str) -> Optional[str]:
+        payload = {
+            "amount": amount,
+            "desc": desc
+        }
+        resp = await self._request("POST", "/pay/sbp/create", json=payload, expected=(200,))
+
+        return resp.text

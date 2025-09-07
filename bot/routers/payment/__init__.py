@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Literal
 from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
 from aiogram.types import LabeledPrice, PreCheckoutQuery
@@ -14,7 +15,8 @@ backend = BackendAPI(env.bot_api_token)
 
 
 CURRENCY = "RUB"
-PROVIDER_TOKEN = env.test_payment_token
+CURRENCY_STARS = "XTR"
+PROVIDER_TOKEN = env.test_payment_token if env.DEBUG else env.life_payment_token
 
 PLANS: dict[int, tuple[str, int]] = {
     1:  ("1 генерация", 88),
@@ -22,34 +24,116 @@ PLANS: dict[int, tuple[str, int]] = {
     10: ("10 генераций", 666),
     50: ("50 генераций", 2999),
 }
+PLANS_STARS: dict[int, tuple[str, int]] = {
+    1:  ("1 генерация", 77),
+    5:  ("5 генераций", 349),
+    10: ("10 генераций", 599),
+    50: ("50 генераций", 2699),
+}
 
 def rub_to_kopeks(rub: int | float) -> int:
     return int(round(float(rub) * 100))
 
-def payment_keyboard() -> types.InlineKeyboardMarkup:
+def select_method_keyboard() -> types.InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    for coins, (label, price_rub) in PLANS.items():
-        kb.button(
-            text=f"{label} — {price_rub}₽",
-            callback_data=f"pay_gens:{coins}"
-        )
-    kb.adjust(1, 1, 1, 1)
+#    kb.button(text="СБП", callback_data="direct_pay")
+    kb.button(text="Картой / SberPay", callback_data="buy_coins")
+    kb.button(text="Telegram Stars", callback_data="stars_pay")
+    kb.adjust(1, 1, 1)
+    return kb.as_markup()
+    
+def sbp_url_button(url: str, amount: str) -> types.InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text=f"Заплатить {amount} RUB", url=url.replace('"', ''))
+    kb.adjust(1)
     return kb.as_markup()
 
+def payment_keyboard(type: Literal["direct", "stars", "internal"]) -> types.InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    if type == "internal":
+        for coins, (label, price_rub) in PLANS.items():
+            kb.button(
+                text=f"{label} — {price_rub}₽",
+                callback_data=f"pay_gens:{coins}"
+            )
+    elif type == "direct":
+        for coins, (label, price_rub) in PLANS.items():
+            kb.button(
+                text=f"{label} — {price_rub}₽",
+                callback_data=f"pay_gens_direct:{coins}"
+            )
+    elif type == "stars":
+        for coins, (label, price_rub) in PLANS_STARS.items():
+            kb.button(
+                text=f"{label} — {price_rub}🌟",
+                callback_data=f"pay_gens_stars:{coins}"
+            )
+    kb.button(text="Назад", callback_data="start_back")
+    kb.adjust(1, 1, 1, 1, 1)
+    return kb.as_markup()
+
+
+@router.callback_query(F.data == "select_pay_method")
+async def select_payment_method(callback: types.CallbackQuery, state: FSMContext):
+    await state.set_state(PaymentState.choosing_method)
+    await callback.message.answer(
+        "Выберите способ оплаты.",
+        reply_markup=select_method_keyboard()
+    )
+    await callback.answer()
 
 @router.callback_query(F.data == "buy_coins")
 async def buy_coins_start(callback: types.CallbackQuery, state: FSMContext):
     await state.set_state(PaymentState.choosing_plan)
     await callback.message.answer(
         "Выберите тариф для пополнения баланса генераций:",
-        reply_markup=payment_keyboard()
+        reply_markup=payment_keyboard("internal")
+    )
+    await callback.answer()
+@router.callback_query(F.data == "stars_pay")
+async def buy_coins_start(callback: types.CallbackQuery, state: FSMContext):
+    await state.set_state(PaymentState.choosing_plan)
+    await callback.message.answer(
+        "Выберите тариф для пополнения баланса генераций:",
+        reply_markup=payment_keyboard("stars")
+    )
+    await callback.answer()
+@router.callback_query(F.data == "direct_pay")
+async def buy_coins_start(callback: types.CallbackQuery, state: FSMContext):
+    await state.set_state(PaymentState.choosing_plan)
+    await callback.message.answer(
+        "Выберите тариф для пополнения баланса генераций:",
+        reply_markup=payment_keyboard("direct")
     )
     await callback.answer()
 
 # ---------- Выбор тарифа → инвойс ----------
 
+@router.callback_query(F.data.startswith("pay_gens_stars:"))
+async def pay_gens_stars(callback: types.CallbackQuery):
+    await callback.answer()  # 1) ACK СРАЗУ
+    try:
+        _, coins_str = callback.data.split(":")
+        coins = int(coins_str)
+    except Exception:
+        return await callback.answer("Неверный тариф", show_alert=True)
+
+    if coins not in PLANS_STARS:
+        return await callback.answer("Такого тарифа нет", show_alert=True)
+
+    label, amount_stars = PLANS_STARS[coins]
+    await callback.message.answer_invoice(
+        title=f"Покупка {label}",
+        description=f"Пополнение баланса на {label.lower()} для бота.",
+        payload=f"buy:stars:{coins}",  # 2) payload для XTR
+        currency=CURRENCY_STARS,       # "XTR"
+        prices=[LabeledPrice(label=label, amount=amount_stars)],  # ровно 1 item
+        start_parameter=f"pay_stars_{coins}",
+    )
+
 @router.callback_query(F.data.startswith("pay_gens:"))
 async def pay_gens(callback: types.CallbackQuery):
+    await callback.answer()
     try:
         _, coins_str = callback.data.split(":")
         coins = int(coins_str)
@@ -79,7 +163,30 @@ async def pay_gens(callback: types.CallbackQuery):
         need_email=True,
         send_email_to_provider=True,
     )
+
+@router.callback_query(F.data.startswith("pay_gens_direct:"))
+async def pay_gens_direct(callback: types.CallbackQuery):
     await callback.answer()
+    try:
+        _, coins_str = callback.data.split(":")
+        coins = int(coins_str)
+    except Exception:
+        await callback.answer("Неверный тариф", show_alert=True)
+        return
+
+    if coins not in PLANS:
+        await callback.answer("Такого тарифа нет", show_alert=True)
+        return
+
+    label, price_rub = PLANS[coins]
+    description = f"Пополнение баланса на {label.lower()} для бота."
+    payload = f"{callback.from_user.id}:{callback.from_user.username}:{coins}"
+
+
+    url = await backend.get_sbp_url(amount=f"{price_rub}.00", desc=payload) or ""
+    await callback.message.answer(description, reply_markup=sbp_url_button(url=url, amount=f"{price_rub}.00"))
+    
+
 
 @router.pre_checkout_query()
 async def process_pre_checkout(pre_checkout_query: PreCheckoutQuery):

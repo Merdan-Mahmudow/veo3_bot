@@ -5,6 +5,7 @@ from api.routers.generate import routes as GenerateRoutes
 from api.routers.auth import routes as AuthRoutes
 from api.routers.gpt import routes as GptRoutes
 from api.routers.tasks import routes as TaskRoutes
+from api.routers.payments import routes as PaymentRoutes
 from api.security import require_bot_service
 
 
@@ -61,6 +62,12 @@ class FastAPIManager:
             prefix="/tasks",
             dependencies=[Depends(require_bot_service)],
             tags=["Задачи и RATE"]
+        )
+        self.api.include_router(
+            PaymentRoutes.router,
+            prefix="/pay",
+            dependencies=[Depends(require_bot_service)],
+            tags=["Платежи"]
         )
 
     def start_server(self):

@@ -42,3 +42,15 @@ class RedisClient:
         except Exception:
             return None
     
+    async def set_del_msg(self, key: str, value: Any, ttl: int = 3600) -> None:
+        await self.redis.set(key, str(value), ex=ttl)
+
+    async def get_del_msg(self, key: str) -> Optional[Any]:
+        raw = await self.redis.get(key)
+        if not raw:
+            return None
+        try:
+            await self.redis.delete(key)
+            return str(raw)
+        except Exception:
+            return None

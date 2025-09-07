@@ -22,3 +22,4 @@ class PaymentState(StatesGroup):
     choosing_plan = State()         # выбираем план
     processing_payment = State()    # ждём оплаты
     confirming = State()            # подтверждаем оплату
+    choosing_method = State()

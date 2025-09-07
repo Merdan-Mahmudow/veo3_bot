@@ -1,17 +1,18 @@
-from datetime import datetime
-import json
 import logging
-from fastapi import APIRouter, Depends,HTTPException, status
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, status
+from api.crud.user import UserService
+from api.crud.user.schema import CoinPlus
 from api.database import get_async_session
-from api.routers.generate import get_task_crud, get_veo_service
+from api.routers.generate import get_redis, get_task_crud, get_veo_service, get_user_service
 from api.routers.generate.schema import CallbackOut, GenerateOut, GeneratePhotoIn, GenerateTextIn, KIECallbackIn, StatusOut, VideoReadyIn
+from services.redis import RedisClient
 from services.veo import VeoCallbackAuthError, VeoService, VeoServiceError
 from sqlalchemy.ext.asyncio import AsyncSession
 from bot.manager import bot_manager
 from aiogram import types
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from api.crud.task import TaskCRUD
-from api.crud.task.schema import TaskCreate
 from utils.progress import finish_progress
 
 
@@ -53,15 +54,6 @@ async def generate_text(
             aspect_ratio=payload.aspect_ratio,
             session=session
         )
-        task_dto = TaskCreate(
-            task_id=data["task_id"],
-            chat_id=payload.chat_id,
-            raw=json.dumps(data.get("raw")),
-            created_at=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
-            is_video=True,
-            rating=0
-        )
-        await task.create_task(task_dto, session)
         return GenerateOut(ok=True, task_id=data["task_id"], raw=data.get("raw"))
     except VeoServiceError as e:
         logging.error("VeoServiceError: %s", e)
@@ -111,15 +103,6 @@ async def generate_photo(
             aspect_ratio=dto.aspect_ratio,
             session=session
         )
-        task_dto = TaskCreate(
-            task_id=data["task_id"],
-            chat_id=dto.chat_id,
-            raw=json.dumps(data.get("raw")),
-            created_at=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
-            is_video=False,
-            rating=0
-        )
-        await task.create_task(task_dto, session)
         return GenerateOut(
             ok=True,
             task_id=data["task_id"],
@@ -180,7 +163,6 @@ async def get_status(
 
 public_router = APIRouter()
 
-
 @public_router.post(
         "/complete", response_model=CallbackOut,
         summary="Колбэк от KIE о завершении задачи"
@@ -188,7 +170,9 @@ public_router = APIRouter()
 async def veo_complete(
     payload: KIECallbackIn,
     svc: VeoService = Depends(get_veo_service),
-    task: TaskCRUD = Depends(get_task_crud)
+    task: TaskCRUD = Depends(get_task_crud),
+    session: AsyncSession = Depends(get_async_session),
+    user: UserService = Depends(get_user_service)
 ):
     """
     Колбэк от KIE (Veo 3) о завершении задачи генерации видео.
@@ -216,14 +200,21 @@ async def veo_complete(
     - `result_url: str | None` - URL сгенерированного видео (если задача завершена)
     - `fallback: bool | None` - флаг использования резервного метода генерации
     """
+    chat_id: Optional[str]
     try:
+        print(payload)
+        if payload.code == 400:
+            chat_id = await task.get_chatID_by_taskID(payload.data.taskId, session)
+            if chat_id:
+                await user.plus_coins(CoinPlus(chat_id=chat_id, count=1))
+                await bot_manager.bot.send_message(
+                    chat_id=int(chat_id), 
+                    text=(
+                        "Видео не вернулось 😕\n"
+                        "Обычно такое случается, если описание или фото слишком жёсткое или содержит то, что система не может показать."
+                        "Попробуйте немного переформулировать — и я сделаю ролик!"
+                    ))
         res = await svc.handle_callback(payload.model_dump())
-        task_dto = TaskCreate(
-            task_id=None,
-            chat_id=None,
-            raw=json.dumps(payload.model_dump()),
-        )
-        await task.create_task(task_dto, session=None)
         return CallbackOut(ok=True, **res)
     except VeoCallbackAuthError:
         logging.error("Callback unauthorized")
@@ -251,7 +242,8 @@ def rating_kb(task_id: str) -> types.InlineKeyboardMarkup:
         summary="Уведомление о готовности видео"
         )
 async def video_ready(
-    payload: VideoReadyIn
+    payload: VideoReadyIn,
+    redis: RedisClient = Depends(get_redis)
 ):
     """
     Уведомление о готовности видео (внутренний эндпоинт).
@@ -278,11 +270,11 @@ async def video_ready(
                                          caption=text,
                                          show_caption_above_media=True
                                          )
-        await bot_manager.bot.send_message(chat_id=payload.chat_id,
+        rating_message = await bot_manager.bot.send_message(chat_id=payload.chat_id,
                                            text="Пожалуйста, оцените качество видео от 1 до 5:",
-                                           reply_markup=rating_kb(
-                                               payload.task_id)
+                                           reply_markup=rating_kb(payload.task_id),
                                            )
+        await redis.set_del_msg(key=f"{payload.chat_id}:{payload.task_id}", value=f"{rating_message.message_id}")
         return {"ok": True}
     except Exception as e:
         logging.exception("Error sending video ready message: %s", e)

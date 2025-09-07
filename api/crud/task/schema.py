@@ -11,8 +11,6 @@ class TaskCreate(BaseModel):
     rating: Optional[int] = None
     created_at: Optional[str] = None
 
-    class Config:
-        from_attributes = True
 
 class TaskRead(BaseModel):
     id: uuid.UUID
@@ -22,6 +20,3 @@ class TaskRead(BaseModel):
     is_video: bool
     rating: Optional[int] = None
     created_at: str
-
-    class Config:
-        from_attributes = True

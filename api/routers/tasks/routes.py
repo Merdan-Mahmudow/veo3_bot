@@ -1,9 +1,11 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from api.crud.task import TaskCRUD
 from api.crud.task.schema import TaskCreate, TaskRead
 from api.database import get_async_session 
 from typing import List, Dict, Any
+from . import get_task_crud
 
 router = APIRouter()
 
@@ -16,7 +18,7 @@ router = APIRouter()
 async def create_task(
     dto: TaskCreate,
     session: AsyncSession = Depends(get_async_session),
-    crud: TaskCRUD = Depends(TaskCRUD),
+    crud: TaskCRUD = Depends(get_task_crud),
 ):
     """
     Создание новой задачи.
@@ -39,7 +41,9 @@ async def create_task(
     """
     try:
         result = await crud.create_task(dto, session)
+        return result
     except Exception as e:
+        logging.error(e)
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get(
@@ -50,7 +54,7 @@ async def create_task(
 async def get_task(
     task_id: str,
     session: AsyncSession = Depends(get_async_session),
-    crud: TaskCRUD = Depends(TaskCRUD),
+    crud: TaskCRUD = Depends(get_task_crud),
 ):
     """
     Получить задачу по task_id.
@@ -71,7 +75,8 @@ async def get_task(
         task = await crud.get_task(task_id, session)
         return task
     except Exception as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        logging.error(e)
+        
     
 @router.get(
         "/", 
@@ -80,7 +85,7 @@ async def get_task(
         )
 async def get_all_tasks(
     session: AsyncSession = Depends(get_async_session),
-    crud: TaskCRUD = Depends(TaskCRUD),
+    crud: TaskCRUD = Depends(get_task_crud),
 ):
     """
     Получить все задачи.
@@ -110,7 +115,7 @@ async def set_task_rating(
     task_id: str,
     rating: int,
     session: AsyncSession = Depends(get_async_session),
-    crud: TaskCRUD = Depends(TaskCRUD),
+    crud: TaskCRUD = Depends(get_task_crud),
 ):
     """
     Установить (обновить) рейтинг задачи.
@@ -133,3 +138,15 @@ async def set_task_rating(
         await crud.set_rating(task_id, rating, session)
     except Exception as e:
         raise HTTPException(status_code=404, detail=str(e))
+    
+@router.get("/get-chat/{task_id}/")
+async def get_chatID_by_taskID(
+    task_id: str,
+    crud: TaskCRUD = Depends(get_task_crud),
+    session: AsyncSession = Depends(get_async_session)
+    ):
+    try:
+        chat_id = await crud.get_chatID_by_taskID(task_id=task_id, session=session)
+        return chat_id
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")

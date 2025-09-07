@@ -1,5 +1,7 @@
+from __future__ import annotations
+import asyncio
+from typing import List, Union
 from fastapi import APIRouter, Depends, Request
-from pydantic import BaseModel
 from api.crud.user import UserService
 from api.database import get_async_session
 from api.routers.system import SystemRoutesManager
@@ -8,6 +10,8 @@ from api.security import require_bot_service
 from bot.manager import bot_manager
 from sqlalchemy.ext.asyncio import AsyncSession
 from scalar_fastapi import get_scalar_api_reference
+from aiogram import types
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
 
 router = APIRouter()
 
@@ -45,53 +49,93 @@ def get_scalar():
     )
 
 
+async def _resolve_chat_id(raw: Union[str, int]):
+    s = str(raw).strip()
+    # username → реальный id
+    if s.startswith("@"):
+        chat = await bot_manager.bot.get_chat(s)
+        return chat.id
+    # просто число (в т.ч. -100… для супергрупп/каналов)
+    return int(s)
+
+async def _send(dto: "BotMessage", chat_id: int):
+    # Валидация доступа/существования
+    chat = await bot_manager.bot.get_chat(chat_id)
+
+    if dto.img_url and not dto.video_url:
+        await bot_manager.bot.send_photo(chat_id=chat_id, photo=dto.img_url, caption=dto.text or None)
+    elif dto.video_url and not dto.img_url:
+        await bot_manager.bot.send_video(chat_id=chat_id, video=dto.video_url, caption=dto.text or None)
+    elif dto.img_url and dto.video_url:
+        media = [
+            types.InputMediaPhoto(media=dto.img_url, caption=dto.text or None),
+            types.InputMediaVideo(media=dto.video_url),
+        ]
+        await bot_manager.bot.send_media_group(chat_id=chat_id, media=media)
+    else:
+        await bot_manager.bot.send_message(chat_id=chat_id, text=dto.text)
+
 @router.post(
     "/post-message",
     summary="Рассылка и личное сообщение",
     dependencies=[Depends(require_bot_service)]
 )
 async def post_message(
-        dto: BotMessage,
-        session: AsyncSession = Depends(get_async_session)
+        dto: "BotMessage",
+        session: "AsyncSession" = Depends(get_async_session)
 ):
-    """
-    Отправка сообщения пользователям (рассылка или личное сообщение).
-
-    Статус запроса:
-    - 200 OK - сообщения успешно отправлены (или поставлены в очередь)
-    - 400 Bad Request - некорректные входные данные
-    - 500 Internal Server Error - ошибка при отправке сообщений
-
-    > [!important]
-    > Заголовки запроса:
-    > - `X-API-KEY: str` - API ключ для аутентификации (обязательный)
-
-    Входные данные (BotMessage):
-    - `chat_id: Optional[str]` - если указан, сообщение отправляется только указанному чату
-    - `text: str` - текст сообщения
-    - `img_url: Optional[str]` - URL изображения для отправки (photo)
-    - `video_url: Optional[str]` - URL видео для отправки (video)
-
-    Поведение:
-    - Если указан chat_id — отправка только этому чату.
-    - Если chat_id не указан — рассылка всем пользователям (list_user_chat_ids).
-    - Поддерживаются отправка photo, video, media_group или простого текста в зависимости от полей.
-    """
     users = await user.list_user_chat_ids(session)
     if dto.chat_id:
         users = [dto.chat_id]
-    for chat in users:
-        if dto.img_url and not dto.video_url:
-            await bot_manager.bot.send_photo(chat_id=int(chat), photo=dto.img_url, caption=dto.text)
-        elif dto.video_url and not dto.img_url:
-            await bot_manager.bot.send_video(chat_id=int(chat), video=dto.video_url, caption=dto.text)
-        elif dto.img_url and dto.video_url:
-            await bot_manager.bot.send_media_group(
-                chat_id=int(chat),
-                media=[
-                    {"type": 'photo', "media": dto.img_url, },
-                    {"type": 'video', "media": dto.video_url, "caption": dto.text},
-                ],
-            )
-        else:
-            await bot_manager.bot.send_message(chat_id=int(chat), text=dto.text,)
+
+    # Нормализация и дедуп
+    norm_ids: List[int] = []
+    for raw in users:
+        try:
+            cid = await _resolve_chat_id(raw)
+            norm_ids.append(cid)
+        except Exception:
+            # Сильно шуметь не будем — просто пропустим и залогируем ниже
+            pass
+    norm_ids = list(dict.fromkeys(norm_ids))
+
+    failures = []
+    sent = 0
+
+    # Ограничим параллелизм, чтобы не ловить 429
+    sem = asyncio.Semaphore(20)
+
+    async def _safe_send(cid: int):
+        nonlocal sent
+        try:
+            async with sem:
+                await _send(dto, cid)
+                sent += 1
+        except TelegramBadRequest as e:
+            # Автомиграция супергрупп
+            # У aiogram 3 в e.params может прилететь migrate_to_chat_id
+            new_id = getattr(getattr(e, "parameters", None), "migrate_to_chat_id", None)
+            if new_id:
+                try:
+                    await _send(dto, new_id)
+                    sent += 1
+                    # важно: обнови у себя в БД chat_id на new_id
+                    await user.update_chat_id(session, old_id=cid, new_id=new_id)
+                    return
+                except Exception as e2:
+                    failures.append((cid, f"migrated→{new_id} failed: {e2!r}"))
+                    return
+            failures.append((cid, f"{type(e).__name__}: {e.message}"))
+        except TelegramForbiddenError as e:
+            failures.append((cid, "forbidden (user blocked bot / no access)"))
+        except Exception as e:
+            failures.append((cid, f"{type(e).__name__}: {e!r}"))
+
+    await asyncio.gather(*[_safe_send(cid) for cid in norm_ids])
+
+    # Возвращаем аккуратный ответ (и можно ещё это логировать)
+    return {
+        "total": len(norm_ids),
+        "sent": sent,
+        "failed": [{"chat_id": cid, "reason": reason} for cid, reason in failures]
+    }

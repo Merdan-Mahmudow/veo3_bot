@@ -14,6 +14,8 @@ class ENV(BaseSettings):
 
     bot_api_token: str
 
+    DEBUG: bool
+
     POSTGRES_HOST: str
     POSTGRES_PORT: str
     POSTGRES_NAME: str
@@ -21,8 +23,12 @@ class ENV(BaseSettings):
     POSTGRES_PASS: str
 
     redis_url: str
+    CELERY_BROKER_URL: str
+    CELERY_RESULT_BACKEND: str
+    CELERY_TIMEZONE: str
     
     test_payment_token: str
+    life_payment_token: str
 
     OPENAI_API_KEY: str
     OPENAI_MODEL: str
@@ -30,6 +36,11 @@ class ENV(BaseSettings):
     BASE_URL: str
     CALLBACK_PATH: str
     SUPPORT_USERNAME: str
+
+    LIVE_YOOKASSA_ACCOINT_ID: str
+    LIVE_YOOKASSA_SECRET_KEY: str
+    TEST_YOOKASSA_ACCOINT_ID: str
+    TEST_YOOKASSA_SECRET_KEY: str
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
