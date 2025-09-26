@@ -206,13 +206,13 @@ async def veo_complete(
         if payload.code == 400:
             chat_id = await task.get_chatID_by_taskID(payload.data.taskId, session)
             if chat_id:
-                await user.plus_coins(CoinPlus(chat_id=chat_id, count=1))
+                await user.plus_coins(CoinPlus(chat_id=chat_id, count=1), session)
+                await finish_progress(payload.data.taskId, bot_manager.bot)
                 await bot_manager.bot.send_message(
                     chat_id=int(chat_id), 
                     text=(
-                        "Видео не вернулось 😕\n"
-                        "Обычно такое случается, если описание или фото слишком жёсткое или содержит то, что система не может показать."
-                        "Попробуйте немного переформулировать — и я сделаю ролик!"
+                       "Видео не вернулось 😕\n"
+"Обычно такое случается, если описание или фото слишком жёсткое или содержит то, что система не может показать. Попробуйте переформулировать или заменить фото — и я сделаю ролик!"
                     ))
         res = await svc.handle_callback(payload.model_dump())
         return CallbackOut(ok=True, **res)

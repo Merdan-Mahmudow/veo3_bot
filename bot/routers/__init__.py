@@ -11,10 +11,11 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot import fsm
 from bot.api import BackendAPI
-from config import ENV
+from config import ENV, Settings
 from services.redis import RedisClient
 from services.storage import YandexS3Storage
 from utils.progress import PROGRESS, show_progress
+from aiogram.enums import ParseMode
 
 
 router = Router()
@@ -22,29 +23,34 @@ env = ENV()
 backend = BackendAPI(env.bot_api_token)
 storage = YandexS3Storage()
 redis = RedisClient()
+settings = Settings()
 
 
 # --- Клавиатуры ---
 
-def start_keyboard() -> types.InlineKeyboardMarkup:
+def start_keyboard(chat_id: int) -> types.InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     kb.button(text="Сгенерировать по тексту", callback_data="generate_by_text")
     kb.button(text="Сгенерировать по фото", callback_data="generate_photo")
     kb.button(text="💰 Пополнить баланс", callback_data="select_pay_method")
     kb.button(text="Что умею?", callback_data="help")
     kb.button(text="Поддержка", url=f"https://t.me/{env.SUPPORT_USERNAME}")
-    kb.adjust(1, 1, 1, 2)
+    if chat_id in settings.get_admins_chat_id():
+        kb.button(text="Панель андминистратора", web_app=types.WebAppInfo(url=env.ADMIN_SITE))
+    kb.adjust(1, 1, 1, 2, 1)
     return kb.as_markup()
 
 
-def help_keyboard() -> types.InlineKeyboardMarkup:
+def help_keyboard(chat_id: int) -> types.InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     kb.button(text="Сгенерировать по тексту", callback_data="generate_by_text")
     kb.button(text="Сгенерировать по фото", callback_data="generate_photo")
     kb.button(text="💰 Пополнить баланс", callback_data="select_pay_method")
     kb.button(text="Назад", callback_data="start_back")
     kb.button(text="Поддержка", url=f"https://t.me/{env.SUPPORT_USERNAME}")
-    kb.adjust(1, 1, 1, 2)
+    if chat_id in settings.get_admins_chat_id():
+        kb.button(text="Панель андминистратора", web_app=types.WebAppInfo(url=env.ADMIN_SITE))
+    kb.adjust(1, 1, 1, 2, 1)
     return kb.as_markup()
 
 
@@ -140,7 +146,7 @@ async def command_start(message: types.Message, state: FSMContext):
 
     sent_message: Optional[types.Message] = await message.answer(
         text,
-        reply_markup=start_keyboard()
+        reply_markup=start_keyboard(message.from_user.id)
     )
 
     # Сохраняем id отправленного сообщения
@@ -150,15 +156,15 @@ async def command_start(message: types.Message, state: FSMContext):
 
 @router.callback_query(F.data == "start_back")
 async def back_to_start(callback: types.CallbackQuery, state: FSMContext):
-    await callback.answer()
     await state.clear()
     user_id = callback.from_user.id
     coins = await backend.get_coins(user_id)
     sent = await callback.message.answer(
         f"У тебя {coins} генераций.\n\nШаг 1/3. Выбери способ создания видео:",
-        reply_markup=start_keyboard()
+        reply_markup=start_keyboard(callback.from_user.id)
     )
     await state.update_data(start_message_id=sent.message_id)
+    await callback.answer()
     await state.set_state(fsm.BotState.start_message_id)
 
 # --- Меню помощи ---
@@ -203,7 +209,7 @@ async def help_entry(callback: types.CallbackQuery, state: FSMContext):
         "• Промпт собираю автоматически (ChatGPT, Gemini 2.5 Pro, Grok) — заточено под Veo 3.\n"
         "• Форматы: 9:16 и 16:9."
     )
-    await callback.message.answer(text, reply_markup=help_keyboard())
+    await callback.message.answer(text, reply_markup=help_keyboard(callback.from_user.id))
 
 # --- Генерация по тексту ---
 
@@ -267,7 +273,12 @@ async def start_photo_flow(callback: types.CallbackQuery, state: FSMContext):
     await callback.answer()
     await state.clear()
     await state.update_data(mode="photo")
-    await callback.message.answer("Шаг 2/3. Пришлите фото с описанием того, что будет происходить в кадре (для референса — без описания).", reply_markup=InlineKeyboardBuilder().button(text="Назад", callback_data="start_back").as_markup())
+    await callback.message.answer(
+        "<b>Шаг 2/3. Пришлите фото с описанием того, что будет происходить в кадре</b> "
+        "<i>(для референса — без описания)</i>.",
+        parse_mode=ParseMode.HTML,
+        reply_markup=InlineKeyboardBuilder().button(text="Назад", callback_data="start_back").as_markup()
+    )
     await state.set_state(fsm.PhotoState.waiting_photo)
 
 
@@ -598,7 +609,7 @@ async def on_repeat_generation_by_task(callback: types.CallbackQuery, state: FSM
 
         new_task_id = new_task["task_id"]
 
-        # сохраняем новый контекст (по желанию) и показываем клавиатуру
+        # сохраняем новый контекст и показываем клавиатуру
         with suppress(Exception):
             await backend.save_task(
                 new_task_id,
@@ -634,7 +645,7 @@ async def on_new_generation(callback: types.CallbackQuery, state: FSMContext):
     await state.clear()
     await callback.message.answer(
         "Начинаем заново.\n\nШаг 1/3. Выбери способ создания видео:",
-        reply_markup=start_keyboard()
+        reply_markup=start_keyboard(callback.from_user.id)
     )
     await callback.answer()
 
