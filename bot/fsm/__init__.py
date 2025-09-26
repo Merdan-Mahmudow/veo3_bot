@@ -23,3 +23,7 @@ class PaymentState(StatesGroup):
     processing_payment = State()    # ждём оплаты
     confirming = State()            # подтверждаем оплату
     choosing_method = State()
+
+class PartnerState(StatesGroup):
+    creating_link = State()
+    requesting_payout = State()

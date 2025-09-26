@@ -12,6 +12,7 @@ class UserSchema(BaseModel):
 class UserRegister(BaseModel):
     nickname: str
     chat_id: str
+    referral_link: str | None = None
     class Config:
         from_attributes = True
 

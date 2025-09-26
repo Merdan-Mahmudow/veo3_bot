@@ -1,9 +1,12 @@
+import uuid
 from typing import Any, Dict
 from sqlalchemy import insert, select, update, delete, func
 from .interface import UserInterface
 from sqlalchemy.ext.asyncio import AsyncSession
 from .schema import CoinMinus, CoinPlus, UserDelete, UserRegister
 from api.models.user import User
+from api.crud.referral_link import get_referral_link
+from api.models.partner import Partner
 
 
 class UserNotFound(Exception): ...
@@ -12,12 +15,33 @@ class BusinessRuleError(Exception): ...
 
 class UserService(UserInterface):
     async def register_user(self, dto: UserRegister, session: AsyncSession) -> Dict[str, Any]:
-        # пример: запретить дубли по chat_id
         exists = await session.scalar(select(func.count()).select_from(User).where(User.chat_id == dto.chat_id))
         if exists:
             raise BusinessRuleError("User with this chat_id already exists")
 
-        await session.execute(insert(User).values(dto.model_dump()))
+        user_data = dto.model_dump()
+        referral_link_str = user_data.pop("referral_link", None)
+
+        referrer_id = None
+        if referral_link_str:
+            if referral_link_str.startswith("ref_"):
+                try:
+                    referrer_uuid = uuid.UUID(referral_link_str.split('_')[1])
+                    referrer_result = await session.execute(select(User).filter(User.id == referrer_uuid))
+                    referrer = referrer_result.scalar_one_or_none()
+                    if referrer:
+                        user_data['referrer_id'] = referrer.id
+                        user_data['coins'] = 1  # Bonus for the new user
+                except (ValueError, IndexError):
+                    pass  # Invalid referral link format
+            else:
+                referral_link = await get_referral_link(session, referral_link_str)
+                if referral_link and referral_link.partner:
+                    user_data['referrer_id'] = referral_link.partner.user_id
+                    user_data['referral_link_id'] = referral_link.id
+                    user_data['coins'] = 1  # Bonus for the new user
+
+        await session.execute(insert(User).values(**user_data))
         await session.commit()
         return {"ok": True}
 

@@ -112,7 +112,13 @@ async def command_start(message: types.Message, state: FSMContext):
             or f"user_{message.from_user.id}"
         )
         try:
-            res = await backend.register_user(message.from_user.id, nickname=nickname)
+            command_args = message.text.split()
+            referral_link = command_args[1] if len(command_args) > 1 else None
+            res = await backend.register_user(
+                message.from_user.id,
+                nickname=nickname,
+                referral_link=referral_link
+            )
         except Exception:
             await message.answer("Техническая ошибка при регистрации. Напиши @softp04")
             return

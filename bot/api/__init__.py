@@ -144,12 +144,14 @@ class BackendAPI:
         except BackendNotFound:
             return False
 
-    async def register_user(self, chat_id: int, nickname: Optional[str] = None) -> RegisterResult:
+    async def register_user(self, chat_id: int, nickname: Optional[str] = None, referral_link: str | None = None) -> RegisterResult:
         """
         Регистрирует пользователя.
         Возвращает {"created": True} или {"created": False, "reason": "exists"}.
         """
         payload = {"chat_id": str(chat_id), "nickname": (nickname or f"user_{chat_id}")[:64]}
+        if referral_link:
+            payload["referral_link"] = referral_link
         try:
             await self._request("POST", "/users/register", json=payload, expected=(200, 201))
             return {"created": True}
@@ -316,3 +318,51 @@ class BackendAPI:
         resp = await self._request("POST", "/pay/sbp/create", json=payload, expected=(200,))
 
         return resp.text
+
+    async def process_referral_payment(self, chat_id: int, amount: float) -> None:
+        """
+        Process referral commissions and bonuses after a payment.
+        """
+        payload = {"user_id": str(chat_id), "amount": amount}
+        await self._request("POST", "/referral/process_payment", json=payload, expected=(200,))
+
+    async def get_partner_by_chat_id(self, chat_id: int) -> dict | None:
+        """
+        Fetches partner details by chat_id.
+        Returns partner data as a dict, or None if not a partner.
+        """
+        try:
+            resp = await self._request("GET", f"/partner/{chat_id}", expected=(200,))
+            return resp.json()
+        except BackendNotFound:
+            return None
+
+    async def create_referral_link(self, partner_id: str, percentage: int) -> dict | None:
+        """
+        Creates a new referral link for a partner.
+        """
+        try:
+            resp = await self._request("POST", f"/partner/{partner_id}/links?percentage={percentage}", expected=(200,))
+            return resp.json()
+        except BackendUnexpectedError:
+            return None
+
+    async def request_payout(self, partner_id: str, amount: float) -> dict | None:
+        """
+        Requests a payout for a partner.
+        """
+        try:
+            resp = await self._request("POST", f"/partner/{partner_id}/payouts?amount={amount}", expected=(200,))
+            return resp.json()
+        except BackendUnexpectedError:
+            return None
+
+    async def get_partner_stats(self, partner_id: str) -> dict | None:
+        """
+        Fetches partner statistics.
+        """
+        try:
+            resp = await self._request("GET", f"/partner/{partner_id}/stats", expected=(200,))
+            return resp.json()
+        except BackendNotFound:
+            return None

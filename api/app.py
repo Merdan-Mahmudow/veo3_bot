@@ -6,6 +6,8 @@ from api.routers.auth import routes as AuthRoutes
 from api.routers.gpt import routes as GptRoutes
 from api.routers.tasks import routes as TaskRoutes
 from api.routers.payments import routes as PaymentRoutes
+from api.routers.referral import router as ReferralRouter
+from api.routers.partner import router as PartnerRouter
 from api.security import require_bot_service
 
 
@@ -68,6 +70,18 @@ class FastAPIManager:
             prefix="/pay",
             dependencies=[Depends(require_bot_service)],
             tags=["Платежи"]
+        )
+        self.api.include_router(
+            ReferralRouter,
+            prefix="/referral",
+            dependencies=[Depends(require_bot_service)],
+            tags=["Рефералы"]
+        )
+        self.api.include_router(
+            PartnerRouter,
+            prefix="/partner",
+            dependencies=[Depends(require_bot_service)],
+            tags=["Партнеры"]
         )
 
     def start_server(self):

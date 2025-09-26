@@ -1,4 +1,5 @@
 from __future__ import annotations
+import logging
 from typing import Literal
 from aiogram import Router, types, F
 from aiogram.fsm.context import FSMContext
@@ -259,6 +260,12 @@ async def successful_payment(message: types.Message):
         return
 
     _processed_payments.add(payment_id)
+
+    # Process referral rewards
+    try:
+        await backend.process_referral_payment(message.from_user.id, float(total / 100))
+    except Exception as e:
+        logging.error(f"Failed to process referral for payment {payment_id}: {e}")
 
     await message.answer(
         f"💳 Оплата успешно проведена!\n"

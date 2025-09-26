@@ -4,6 +4,8 @@ from aiogram import Bot, Dispatcher
 from config import ENV
 from bot import routers
 from bot.routers.payment import router as payment_router
+from bot.routers.partner import router as partner_router
+from bot.routers.referral import router as referral_router
 # from bot.routers.prompts import router as prompts_router
 import asyncio
 from aiogram.exceptions import TelegramRetryAfter
@@ -21,6 +23,8 @@ class BotManager:
         if routers.router.parent_router is None:
             self.dp.include_router(routers.router)
         self.dp.include_router(payment_router)
+        self.dp.include_router(partner_router)
+        self.dp.include_router(referral_router)
 
     async def bot_start(self):
         try:
