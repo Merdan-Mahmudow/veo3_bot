@@ -8,6 +8,7 @@ from api.routers.tasks import routes as TaskRoutes
 from api.routers.payments import routes as PaymentRoutes
 from api.routers.referral import router as ReferralRouter
 from api.routers.partner import router as PartnerRouter
+from api.routers import admin as AdminRouter
 from api.security import require_bot_service
 
 
@@ -82,6 +83,12 @@ class FastAPIManager:
             prefix="/partner",
             dependencies=[Depends(require_bot_service)],
             tags=["Партнеры"]
+        )
+        self.api.include_router(
+            AdminRouter.router,
+            prefix="/admin",
+            dependencies=[Depends(require_bot_service)],
+            tags=["Админ-панель"]
         )
 
     def start_server(self):

@@ -2,10 +2,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.database import get_async_session
+from typing import List
+from sqlalchemy.orm import selectinload
 from api.crud.user.schema import (
-    UserRegister, UserDelete, CoinMinus, CoinPlus
+    UserRegister, UserDelete, CoinMinus, CoinPlus, UserRolesOut
 )
 from api.crud.user import UserService, UserNotFound, BusinessRuleError
+from api.models import User
 
 
 router = APIRouter()
@@ -165,6 +168,24 @@ async def minus_coin(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except BusinessRuleError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/{chat_id}/roles", summary="Получение ролей пользователя", response_model=UserRolesOut)
+async def get_user_roles(
+    chat_id: str,
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    Получение списка ролей пользователя по chat_id.
+    """
+    user_stmt = select(User).options(selectinload(User.roles)).where(User.chat_id == chat_id)
+    result = await session.execute(user_stmt)
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    return UserRolesOut(roles=[role.name for role in user.roles])
 
 
 @router.post("/coins/plus", summary="Начисление монет пользователю")

@@ -1,50 +1,27 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from typing import List, Optional
 
-class UserSchema(BaseModel):
-    id: int
-    nickname: str
+class UserBase(BaseModel):
     chat_id: str
-    coins: int
-    
-    class Config:
-        from_attributes = True
+    nickname: Optional[str] = None
 
-class UserRegister(BaseModel):
-    nickname: str
-    chat_id: str
-    referral_link: str | None = None
-    class Config:
-        from_attributes = True
-
-class UserRead(UserSchema):
-    ...
-
-    class Config:
-        from_attributes = True
+class UserRegister(UserBase):
+    referrer_type: Optional[str] = None
+    referrer_id: Optional[str] = None
+    ref_link_id: Optional[str] = None
 
 class UserDelete(BaseModel):
     chat_id: str
 
-    class Config:
-        from_attributes = True
-
-
-class CoinsCount(BaseModel):
-    chat_id: str
-    count: int
-
-    class Config:
-        from_attributes = True
-
 class CoinMinus(BaseModel):
     chat_id: str
 
-    class Config:
-        from_attributes = True
-
 class CoinPlus(BaseModel):
     chat_id: str
-    count: int
+    count: int = Field(..., gt=0)
+
+class UserRolesOut(BaseModel):
+    roles: List[str]
 
     class Config:
         from_attributes = True

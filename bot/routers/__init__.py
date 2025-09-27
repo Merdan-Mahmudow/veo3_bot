@@ -16,6 +16,7 @@ from services.redis import RedisClient
 from services.storage import YandexS3Storage
 from utils.progress import PROGRESS, show_progress
 from aiogram.enums import ParseMode
+from utils.referral import ReferralService
 
 
 router = Router()
@@ -24,6 +25,7 @@ backend = BackendAPI(env.bot_api_token)
 storage = YandexS3Storage()
 redis = RedisClient()
 settings = Settings()
+referral_service = ReferralService()
 
 
 # --- Клавиатуры ---
@@ -119,13 +121,26 @@ async def command_start(message: types.Message, state: FSMContext):
             or f"user_{message.from_user.id}"
         )
         try:
+            # Handle referral link
+            referral_payload = None
             command_args = message.text.split()
-            referral_link = command_args[1] if len(command_args) > 1 else None
-            res = await backend.register_user(
-                message.from_user.id,
-                nickname=nickname,
-                referral_link=referral_link
-            )
+            if len(command_args) > 1:
+                encoded_token = command_args[1]
+                referral_payload = referral_service.decode_and_validate_token(encoded_token)
+                if not referral_payload:
+                    logging.warning(f"Invalid or expired referral token used by chat_id {message.from_user.id}")
+
+            # Prepare registration data for the backend
+            registration_data = {
+                "chat_id": str(message.from_user.id),
+                "nickname": nickname,
+            }
+            if referral_payload:
+                registration_data["referrer_type"] = referral_payload.get("t")
+                registration_data["referrer_id"] = referral_payload.get("rid")
+                registration_data["ref_link_id"] = referral_payload.get("lid")
+
+            res = await backend.register_user(**registration_data)
         except Exception:
             await message.answer("Техническая ошибка при регистрации. Напиши @softp04")
             return
@@ -173,6 +188,71 @@ async def back_to_start(callback: types.CallbackQuery, state: FSMContext):
     )
     await state.update_data(start_message_id=sent.message_id)
     await state.set_state(fsm.BotState.start_message_id)
+
+
+# --- Партнерская программа ---
+
+def partner_cabinet_kb() -> types.InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="📊 Дашборд", callback_data="partner:dashboard")
+    kb.button(text="🔗 Мои ссылки", callback_data="partner:links")
+    kb.button(text="📈 История начислений", callback_data="partner:commissions")
+    kb.button(text="💰 Выплаты", callback_data="partner:payouts")
+    kb.button(text="🏠 Назад в главное меню", callback_data="start_back")
+    kb.adjust(2, 2, 1)
+    return kb.as_markup()
+
+@router.callback_query(F.data == "partner")
+async def partner_program_entry(callback: types.CallbackQuery, state: FSMContext):
+    await callback.answer()
+    user_id = callback.from_user.id
+
+    try:
+        # This is a placeholder for a real role check
+        user_roles = await backend.get_user_roles(user_id)
+        is_partner = "partner" in user_roles
+
+        if is_partner:
+            # Show Partner Cabinet
+            dashboard_data = await backend.get_partner_dashboard(user_id)
+            text = (
+                "**🗄️ Кабинет партнера**\n\n"
+                f"**Баланс:**\n"
+                f"  - Доступно к выводу: **{dashboard_data.get('balance_available', 0) / 100:.2f} ₽**\n"
+                f"  - В холде: **{dashboard_data.get('balance_hold', 0) / 100:.2f} ₽**\n\n"
+                f"**Общая статистика:**\n"
+                f"  - Всего регистраций: **{dashboard_data.get('total_registrations', 0)}**\n"
+                f"  - Всего продаж: **{dashboard_data.get('total_sales', 0) / 100:.2f} ₽**\n"
+                f"  - Всего заработано: **{dashboard_data.get('total_earned', 0) / 100:.2f} ₽**"
+            )
+            await callback.message.edit_text(text, reply_markup=partner_cabinet_kb(), parse_mode=ParseMode.MARKDOWN)
+        else:
+            # Show standard user referral info
+            link_data = await backend.get_user_referral_link(user_id)
+            stats_data = await backend.get_user_referral_stats(user_id)
+
+            link = link_data.get("url", "Не удалось получить ссылку.")
+            stats = stats_data
+
+            text = (
+                "🎉 **Ваша реферальная программа**\n\n"
+                "Пригласите друга и получите по **1 бесплатной генерации** каждый "
+                "после его первой покупки!\n\n"
+                "🔗 **Ваша персональная ссылка:**\n"
+                f"`{link}`\n\n"
+                "📊 **Статистика:**\n"
+                f"  - Друзей зарегистрировано: **{stats.get('registrations', 0)}**\n"
+                f"  - Совершили первую покупку: **{stats.get('first_purchases', 0)}**\n"
+                f"  - Бонусов заработано: **{stats.get('bonuses_earned', 0)}** генераций"
+            )
+            kb = InlineKeyboardBuilder()
+            kb.button(text="Назад", callback_data="start_back")
+            await callback.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode=ParseMode.MARKDOWN)
+
+    except Exception as e:
+        logging.error(f"Failed to load partner program data for user {user_id}: {e}", exc_info=True)
+        await callback.message.answer("Не удалось загрузить данные партнерской программы. Попробуйте позже.")
+
 
 # --- Меню помощи ---
 
