@@ -1,13 +1,14 @@
 import uuid
+import logging
 from typing import Any, Dict
 from sqlalchemy import insert, select, update, delete, func
 from sqlalchemy.orm import selectinload
 from .interface import UserInterface
 from sqlalchemy.ext.asyncio import AsyncSession
 from .schema import CoinMinus, CoinPlus, UserDelete, UserRegister
-from api.models import User, ReferralLink, Role
+from api.models import User, Referral, ReferralLink, Role
 from api.models.referral_link import LinkType
-from utils.referral import ReferralService as LinkGenerationService
+from api.models.referral import ReferrerType
 
 class UserNotFound(Exception): ...
 class BusinessRuleError(Exception): ...
@@ -18,39 +19,48 @@ class UserService(UserInterface):
         if exists_count > 0:
             raise BusinessRuleError("User with this chat_id already exists")
 
-        user_data = dto.model_dump(exclude_unset=True)
+        # --- Create the User ---
         is_suspicious = False
-
-        # Anti-fraud: Check for self-referral
         if dto.referrer_id:
-            referrer = await session.get(User, uuid.UUID(dto.referrer_id))
-            if referrer and referrer.chat_id == dto.chat_id:
-                is_suspicious = True
-                logging.warning(f"Self-referral detected for chat_id {dto.chat_id}. Marking as suspicious.")
+            try:
+                # This check is simplified. A real system might check IP, device ID, etc.
+                referrer = await session.get(User, uuid.UUID(dto.referrer_id))
+                if referrer and referrer.chat_id == dto.chat_id:
+                    is_suspicious = True
+                    logging.warning(f"Self-referral detected for chat_id {dto.chat_id}. Marking as suspicious.")
+            except (ValueError, TypeError):
+                logging.warning(f"Invalid referrer_id format: {dto.referrer_id}")
 
-        user_data['is_suspicious'] = is_suspicious
-
-        # Create the user
-        new_user = User(**user_data)
+        new_user = User(
+            chat_id=dto.chat_id,
+            nickname=dto.nickname,
+            is_suspicious=is_suspicious
+        )
         session.add(new_user)
-        await session.flush() # Flush to get the new_user.id
+        await session.flush()  # Flush to get the new_user.id
 
-        # Assign default 'user' role
+        # --- Create the Referral Record (if applicable) ---
+        if dto.referrer_id and dto.ref_link_id and dto.referrer_type:
+            referral_record = Referral(
+                new_user_id=new_user.id,
+                referrer_id=uuid.UUID(dto.referrer_id),
+                ref_link_id=uuid.UUID(dto.ref_link_id),
+                referrer_type=ReferrerType[dto.referrer_type]
+            )
+            session.add(referral_record)
+
+        # --- Assign Default Role ---
         user_role = await session.scalar(select(Role).where(Role.name == 'user'))
         if not user_role:
             user_role = Role(name='user')
             session.add(user_role)
         new_user.roles.append(user_role)
 
-        # Create a default referral link for the new user
-        link_generator = LinkGenerationService()
-        # The token needs to be unique. Using user_id ensures this.
-        token = link_generator._sign_payload(f"user:{new_user.id}")
-
+        # --- Create Default Referral Link for the new user ---
         default_link = ReferralLink(
             owner_id=new_user.id,
             link_type=LinkType.user,
-            token=token,
+            token=uuid.uuid4().hex,  # Generate a unique, random token
             comment="Default user link"
         )
         session.add(default_link)

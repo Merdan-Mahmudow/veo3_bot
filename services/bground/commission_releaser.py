@@ -7,12 +7,24 @@ from sqlalchemy import update
 from api.models import PartnerCommissionLedger, PartnerBalance, User
 from api.models.partner_commission_ledger import CommissionStatus
 from api.database import get_async_session # Assuming celery can get a session
-# from services.celery_app import app # Assuming a celery app instance exists
+# This file should be imported in a place where the Celery app is initialized
+# to ensure the task is registered.
+# from services.celery_app import app
+
+# In a production setup, this task would be scheduled to run periodically,
+# for example, once every hour, using Celery Beat.
+# Example Celery Beat schedule configuration:
+# app.conf.beat_schedule = {
+#     'release-commissions-every-hour': {
+#         'task': 'release_held_commissions',
+#         'schedule': 3600.0,  # Run every hour
+#     },
+# }
 
 # @app.task(name="release_held_commissions")
 async def release_held_commissions():
     """
-    A periodic task to release commissions from hold to available balance.
+    A periodic Celery task to release commissions from hold to available balance.
     """
     logging.info("Starting commission release task...")
     session: AsyncSession = get_async_session() # Simplified session getting

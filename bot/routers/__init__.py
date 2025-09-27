@@ -206,52 +206,70 @@ def partner_cabinet_kb() -> types.InlineKeyboardMarkup:
 async def partner_program_entry(callback: types.CallbackQuery, state: FSMContext):
     await callback.answer()
     user_id = callback.from_user.id
-
     try:
-        # This is a placeholder for a real role check
         user_roles = await backend.get_user_roles(user_id)
         is_partner = "partner" in user_roles
-
         if is_partner:
-            # Show Partner Cabinet
-            dashboard_data = await backend.get_partner_dashboard(user_id)
-            text = (
-                "**🗄️ Кабинет партнера**\n\n"
-                f"**Баланс:**\n"
-                f"  - Доступно к выводу: **{dashboard_data.get('balance_available', 0) / 100:.2f} ₽**\n"
-                f"  - В холде: **{dashboard_data.get('balance_hold', 0) / 100:.2f} ₽**\n\n"
-                f"**Общая статистика:**\n"
-                f"  - Всего регистраций: **{dashboard_data.get('total_registrations', 0)}**\n"
-                f"  - Всего продаж: **{dashboard_data.get('total_sales', 0) / 100:.2f} ₽**\n"
-                f"  - Всего заработано: **{dashboard_data.get('total_earned', 0) / 100:.2f} ₽**"
-            )
-            await callback.message.edit_text(text, reply_markup=partner_cabinet_kb(), parse_mode=ParseMode.MARKDOWN)
+            await partner_dashboard_handler(callback, state) # Go directly to dashboard
         else:
-            # Show standard user referral info
-            link_data = await backend.get_user_referral_link(user_id)
-            stats_data = await backend.get_user_referral_stats(user_id)
-
-            link = link_data.get("url", "Не удалось получить ссылку.")
-            stats = stats_data
-
-            text = (
-                "🎉 **Ваша реферальная программа**\n\n"
-                "Пригласите друга и получите по **1 бесплатной генерации** каждый "
-                "после его первой покупки!\n\n"
-                "🔗 **Ваша персональная ссылка:**\n"
-                f"`{link}`\n\n"
-                "📊 **Статистика:**\n"
-                f"  - Друзей зарегистрировано: **{stats.get('registrations', 0)}**\n"
-                f"  - Совершили первую покупку: **{stats.get('first_purchases', 0)}**\n"
-                f"  - Бонусов заработано: **{stats.get('bonuses_earned', 0)}** генераций"
-            )
-            kb = InlineKeyboardBuilder()
-            kb.button(text="Назад", callback_data="start_back")
-            await callback.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode=ParseMode.MARKDOWN)
-
+            await show_user_referral_info(callback, user_id)
     except Exception as e:
         logging.error(f"Failed to load partner program data for user {user_id}: {e}", exc_info=True)
         await callback.message.answer("Не удалось загрузить данные партнерской программы. Попробуйте позже.")
+
+async def show_user_referral_info(callback: types.CallbackQuery, user_id: int):
+    link_data = await backend.get_user_referral_link(user_id)
+    stats_data = await backend.get_user_referral_stats(user_id)
+    link = link_data.get("url", "Не удалось получить ссылку.")
+    stats = stats_data
+    text = (
+        "🎉 **Ваша реферальная программа**\n\n"
+        "Пригласите друга и получите по **1 бесплатной генерации** каждый "
+        "после его первой покупки!\n\n"
+        "🔗 **Ваша персональная ссылка:**\n"
+        f"`{link}`\n\n"
+        "📊 **Статистика:**\n"
+        f"  - Друзей зарегистрировано: **{stats.get('registrations', 0)}**\n"
+        f"  - Совершили первую покупку: **{stats.get('first_purchases', 0)}**\n"
+        f"  - Бонусов заработано: **{stats.get('bonuses_earned', 0)}** генераций"
+    )
+    kb = InlineKeyboardBuilder()
+    kb.button(text="Назад", callback_data="start_back")
+    await callback.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode=ParseMode.MARKDOWN)
+
+@router.callback_query(F.data == "partner:dashboard")
+async def partner_dashboard_handler(callback: types.CallbackQuery, state: FSMContext):
+    await callback.answer()
+    user_id = callback.from_user.id
+    try:
+        dashboard_data = await backend.get_partner_dashboard(user_id)
+        text = (
+            "**🗄️ Кабинет партнера**\n\n"
+            f"**Баланс:**\n"
+            f"  - Доступно к выводу: **{dashboard_data.get('balance_available', 0) / 100:.2f} ₽**\n"
+            f"  - В холде: **{dashboard_data.get('balance_hold', 0) / 100:.2f} ₽**\n\n"
+            f"**Общая статистика:**\n"
+            f"  - Всего регистраций: **{dashboard_data.get('total_registrations', 0)}**\n"
+            f"  - Всего продаж: **{dashboard_data.get('total_sales', 0) / 100:.2f} ₽**\n"
+            f"  - Всего заработано: **{dashboard_data.get('total_earned', 0) / 100:.2f} ₽**"
+        )
+        await callback.message.edit_text(text, reply_markup=partner_cabinet_kb(), parse_mode=ParseMode.MARKDOWN)
+    except Exception as e:
+        logging.error(f"Failed to load partner dashboard for user {user_id}: {e}", exc_info=True)
+        await callback.message.answer("Не удалось загрузить дашборд. Попробуйте позже.")
+
+# Placeholders for other partner cabinet features
+@router.callback_query(F.data == "partner:links")
+async def partner_links_placeholder(callback: types.CallbackQuery, state: FSMContext):
+    await callback.answer("Эта функция в разработке.", show_alert=True)
+
+@router.callback_query(F.data == "partner:commissions")
+async def partner_commissions_placeholder(callback: types.CallbackQuery, state: FSMContext):
+    await callback.answer("Эта функция в разработке.", show_alert=True)
+
+@router.callback_query(F.data == "partner:payouts")
+async def partner_payouts_placeholder(callback: types.CallbackQuery, state: FSMContext):
+    await callback.answer("Эта функция в разработке.", show_alert=True)
 
 
 # --- Меню помощи ---
