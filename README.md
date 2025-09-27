@@ -24,5 +24,6 @@ uv add <package-name>
    ```
  - Create migrations:
    ```bash
-   uv run alembic revision --autogenerate
+   uv run alembic revision
    ```
+
