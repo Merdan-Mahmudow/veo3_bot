@@ -17,16 +17,17 @@ def partner_keyboard():
     kb.adjust(1, 1, 1)
     return kb.as_markup()
 
-@router.message(F.text == "/partner")
-async def partner_menu(message: types.Message, state: FSMContext):
-    partner = await backend.get_partner_by_chat_id(message.from_user.id)
+@router.callback_query(F.data == "partner")
+async def partner_menu(callback: types.CallbackQuery, state: FSMContext):
+    partner = await backend.get_partner_by_chat_id(callback.from_user.id)
     if partner and partner.get("is_verified"):
-        await message.answer(
+        await callback.message.answer(
             "Добро пожаловать в кабинет партнера!",
             reply_markup=partner_keyboard()
         )
     else:
-        await message.answer("У вас нет доступа к кабинету партнера.")
+        await callback.message.answer("У вас нет доступа к кабинету партнера.")
+    await callback.answer()
 
 @router.callback_query(F.data == "partner_stats")
 async def partner_stats(callback: types.CallbackQuery, state: FSMContext):

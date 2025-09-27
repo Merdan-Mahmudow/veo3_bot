@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from api.database import get_session
+from api.database import get_async_session
 from api.models.user import User
 from api.crud.partner import get_partner_by_user_id, update_balance
 from api.crud.transaction import create_transaction
@@ -9,7 +9,7 @@ from sqlalchemy.future import select
 router = APIRouter()
 
 @router.post("/process_payment")
-async def process_payment(user_id: str, amount: float, session: AsyncSession = Depends(get_session)):
+async def process_payment(user_id: str, amount: float, session: AsyncSession = Depends(get_async_session)):
     user_result = await session.execute(select(User).filter(User.chat_id == user_id).options(select.joinedload(User.referral_link)))
     user = user_result.scalar_one_or_none()
 

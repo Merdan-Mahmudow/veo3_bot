@@ -207,6 +207,7 @@ async def veo_complete(
             chat_id = await task.get_chatID_by_taskID(payload.data.taskId, session)
             if chat_id:
                 await user.plus_coins(CoinPlus(chat_id=chat_id, count=1))
+                await finish_progress(payload.data.taskId, bot_manager.bot)
                 await bot_manager.bot.send_message(
                     chat_id=int(chat_id), 
                     text=(

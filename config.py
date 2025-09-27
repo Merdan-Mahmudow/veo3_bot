@@ -1,3 +1,4 @@
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -41,7 +42,8 @@ class ENV(BaseSettings):
     LIVE_YOOKASSA_SECRET_KEY: str
     TEST_YOOKASSA_ACCOINT_ID: str
     TEST_YOOKASSA_SECRET_KEY: str
-    bot_username: str
+    ADMINS_CHAT_ID: str
+    ADMIN_SITE: str
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
@@ -51,3 +53,7 @@ class Settings():
 
     def generate_postgres_url(self) -> str:
         return f"postgresql+asyncpg://{self.env.POSTGRES_USER}:{self.env.POSTGRES_PASS}@{self.env.POSTGRES_HOST}:{self.env.POSTGRES_PORT}/{self.env.POSTGRES_NAME}"
+    
+    def get_admins_chat_id(self) -> list[int]:
+        ids = self.env.ADMINS_CHAT_ID.split(":")
+        return [int(id) for id in ids]

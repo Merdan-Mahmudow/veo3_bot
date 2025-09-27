@@ -1,5 +1,4 @@
 import uuid
-from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from api.models.partner import Partner

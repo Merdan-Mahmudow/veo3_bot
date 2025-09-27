@@ -16,7 +16,7 @@ class User(Base):
     coins: Mapped[int] = mapped_column(Integer, default=0)
     referrer_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=True)
     referral_link_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("referral_links.id"), nullable=True)
-    first_payment_done: Mapped[bool] = mapped_column(Boolean, default=False)
+    first_payment_done: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
     referrer = relationship("User", back_populates="referred_users", remote_side=[id])
     referred_users = relationship("User", back_populates="referrer")
