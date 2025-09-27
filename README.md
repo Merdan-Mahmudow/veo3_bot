@@ -18,12 +18,9 @@ uv sync
 uv add <package-name>
 ```
 # Alembic | Migrations
- - Migrate:
-   ```bash
-   uv run alembic upgrade head
-   ```
  - Create migrations:
    ```bash
    uv run alembic revision
    ```
+
 
