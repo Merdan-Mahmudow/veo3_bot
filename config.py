@@ -14,6 +14,7 @@ class ENV(BaseSettings):
     webhook_endpoint: str
 
     bot_api_token: str
+    BOT_USERNAME: str
 
     DEBUG: bool
 

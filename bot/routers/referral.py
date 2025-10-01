@@ -15,7 +15,7 @@ async def referral_command(message: types.Message):
 
     # For simplicity, we'll use the user's ID to create a referral link.
     # In a real application, this should be a unique, generated code.
-    referral_link = f"https://t.me/{env.bot_username}?start=ref_{user['id']}"
+    referral_link = f"https://t.me/{env.BOT_USERNAME}?start=ref_{user['id']}"
 
     await message.answer(
         "Пригласите друга и получите по 1 видео в подарок!\n\n"

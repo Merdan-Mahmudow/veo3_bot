@@ -1,15 +1,15 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING
+import enum, uuid
+from typing import List, Optional
+from sqlalchemy import UUID, Boolean, Enum as SAEnum, ForeignKey, Integer, String
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from api.models import Base
-from api.models.role import user_roles # Keep the association table import
-import uuid
-from sqlalchemy import UUID, Boolean, String, Integer
-from sqlalchemy.orm import mapped_column, Mapped, relationship
+from api.models.role import Role, user_roles
+from api.models.referral_link import ReferralLink
 
-if TYPE_CHECKING:
-    from api.models.referral import Referral
-    from api.models.role import Role
-    from api.models.referral_link import ReferralLink
+class ReferrerType(enum.Enum):
+    user = "user"
+    partner = "partner"
 
 class User(Base):
     __tablename__ = "users"
@@ -17,14 +17,44 @@ class User(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     nickname: Mapped[str] = mapped_column(String, nullable=False)
     chat_id: Mapped[str] = mapped_column(String, nullable=False, unique=True)
-    coins: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    coins: Mapped[int] = mapped_column(Integer, default=0)
+
+    # ВАЖНО: имя enum-типов совпадает с тем, что в миграции (referrertype)
+    referrer_type: Mapped[Optional[ReferrerType]] = mapped_column(SAEnum(ReferrerType, name="referrertype"), nullable=True)
+    referrer_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    referral_link_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("referral_links.id"), nullable=True)
+
+    first_payment_done: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     is_suspicious: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
-    # The referral event that brought this user to the bot. One-to-one.
-    referral_record: Mapped["Referral"] = relationship(back_populates="user", foreign_keys="Referral.new_user_id", cascade="all, delete-orphan")
+    # self-FK: явно указываем foreign_keys и remote_side
+    referrer: Mapped[Optional["User"]] = relationship(
+        "User",
+        foreign_keys="[User.referrer_id]",
+        remote_side="[User.id]",
+        back_populates="referrals",
+    )
+    referrals: Mapped[List["User"]] = relationship(
+        "User",
+        foreign_keys="[User.referrer_id]",
+        back_populates="referrer",
+    )
 
-    # A user can own multiple referral links (e.g., as a partner)
-    referral_links: Mapped[List["ReferralLink"]] = relationship(back_populates="owner")
+    # Пользователь ПРИШЁЛ по конкретной ссылке (User.referral_link_id -> ReferralLink.id)
+    referral_link: Mapped[Optional["ReferralLink"]] = relationship(
+        "ReferralLink",
+        primaryjoin="User.referral_link_id == ReferralLink.id",
+        foreign_keys="[User.referral_link_id]",
+        back_populates="referred_users",
+    )
 
-    # A user can have multiple roles (user, partner, admin)
-    roles: Mapped[List["Role"]] = relationship(secondary=user_roles, back_populates="users")
+    # Пользователь ВЛАДЕЕТ множеством ссылок (ReferralLink.owner_id -> User.id)
+    referral_links: Mapped[List["ReferralLink"]] = relationship(
+        "ReferralLink",
+        primaryjoin="User.id == ReferralLink.owner_id",
+        foreign_keys="[ReferralLink.owner_id]",
+        back_populates="owner",
+        cascade="all, delete-orphan",   # опционально
+    )
+
+    roles = relationship("Role", secondary=user_roles, back_populates="users")

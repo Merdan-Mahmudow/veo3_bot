@@ -99,7 +99,7 @@ async def process_payment(
 
     return {"status": "ok"}
 
-@router.get("/referral/link/{user_chat_id}", response_model=ReferralLinkOut, summary="Get user's referral link")
+@router.get("/link/{user_chat_id}", response_model=ReferralLinkOut, summary="Get user's referral link")
 async def get_user_referral_link(user_chat_id: str, session: AsyncSession = Depends(get_async_session)):
     user_stmt = select(User).options(selectinload(User.referral_links)).where(User.chat_id == user_chat_id)
     user = (await session.execute(user_stmt)).scalar_one_or_none()
@@ -122,7 +122,7 @@ async def get_user_referral_link(user_chat_id: str, session: AsyncSession = Depe
     )
     return ReferralLinkOut(url=full_link)
 
-@router.get("/referral/stats/{user_chat_id}", response_model=ReferralStatsOut, summary="Get user's referral statistics")
+@router.get("/stats/{user_chat_id}", response_model=ReferralStatsOut, summary="Get user's referral statistics")
 async def get_user_referral_stats(user_chat_id: str, session: AsyncSession = Depends(get_async_session)):
     user_stmt = select(User).where(User.chat_id == user_chat_id)
     user = (await session.execute(user_stmt)).scalar_one_or_none()
@@ -150,7 +150,7 @@ async def get_user_referral_stats(user_chat_id: str, session: AsyncSession = Dep
         bonuses_earned=bonuses_earned
     )
 
-@router.get("/referral/bonuses/{user_chat_id}", response_model=List[BonusHistoryItem], summary="Get user's bonus history")
+@router.get("/bonuses/{user_chat_id}", response_model=List[BonusHistoryItem], summary="Get user's bonus history")
 async def get_user_bonus_history(user_chat_id: str, session: AsyncSession = Depends(get_async_session)):
     user_stmt = select(User).where(User.chat_id == user_chat_id)
     user = (await session.execute(user_stmt)).scalar_one_or_none()

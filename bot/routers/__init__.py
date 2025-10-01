@@ -97,7 +97,6 @@ async def _stop_task(task: asyncio.Task | None):
 
 @router.message(Command("start"))
 async def command_start(message: types.Message, state: FSMContext):
-
     # Проверяем наличие пользователя
     try:
         exists = await backend.check_user_exist(message.from_user.id)
@@ -124,9 +123,11 @@ async def command_start(message: types.Message, state: FSMContext):
             # Handle referral link
             referral_payload = None
             command_args = message.text.split()
+            print(command_args)
             if len(command_args) > 1:
                 encoded_token = command_args[1]
                 referral_payload = referral_service.decode_and_validate_token(encoded_token)
+                print(referral_payload)
                 if not referral_payload:
                     logging.warning(f"Invalid or expired referral token used by chat_id {message.from_user.id}")
 
@@ -139,15 +140,15 @@ async def command_start(message: types.Message, state: FSMContext):
                 registration_data["referrer_type"] = referral_payload.get("t")
                 registration_data["referrer_id"] = referral_payload.get("rid")
                 registration_data["ref_link_id"] = referral_payload.get("lid")
-
-            res = await backend.register_user(**registration_data)
+            print("Registration data: ", registration_data)
+            # res = await backend.register_user(**registration_data)
         except Exception:
             await message.answer("Техническая ошибка при регистрации. Напиши @softp04")
             return
 
-        if not res.get("created", False) and res.get("reason") != "exists":
-            await message.answer("Внутренняя ошибка регистрации. Напиши @softp04")
-            return
+        # if not res.get("created", False) and res.get("reason") != "exists":
+        #     await message.answer("Внутренняя ошибка регистрации. Напиши @softp04")
+        #     return
 
     # Общая ветка после ensure user: получаем баланс и даём меню
     try:

@@ -142,7 +142,7 @@ class BackendAPI:
         payload = {k: v for k, v in kwargs.items() if v is not None}
         try:
             # NOTE: Assuming the registration endpoint is at /auth/register based on grep
-            await self._request("POST", "/auth/register", json=payload, expected=(200, 201))
+            await self._request("POST", "/users/register", json=payload, expected=(200, 201))
             return {"created": True}
         except BackendUnexpectedError as e:
             if "exists" in str(e).lower():
@@ -156,7 +156,7 @@ class BackendAPI:
     async def get_user_referral_link(self, chat_id: int) -> str:
         """Gets the user's referral link."""
         resp = await self._request("GET", f"/referral/link/{chat_id}", expected=(200,))
-        data = await resp.json()
+        data =  resp.json()
         return data.get("url")
 
     async def get_user_referral_stats(self, chat_id: int) -> dict:
@@ -173,8 +173,8 @@ class BackendAPI:
         """Gets the user's roles from the backend."""
         try:
             # NOTE: Assuming the endpoint is at /auth/{chat_id}/roles based on router structure
-            resp = await self._request("GET", f"/auth/{chat_id}/roles", expected=(200,))
-            data = await resp.json()
+            resp = await self._request("GET", f"/users/{chat_id}/roles", expected=(200,))
+            data = resp.json()
             return data.get("roles", [])
         except BackendNotFound:
             return [] # If user not found, they have no roles.
@@ -221,4 +221,8 @@ class BackendAPI:
 
     async def get_task(self, task_id: str) -> dict:
         resp = await self._request("GET", f"/tasks/{task_id}", expected=(200,))
+        return resp.json()
+    
+    async def get_user(self, chat_id: int) -> dict:
+        resp = await self._request("GET", f"/users/{chat_id}", expected=(200,))
         return resp.json()
