@@ -7,6 +7,7 @@ class Base(DeclarativeBase):
 from api.models.user import User
 from api.models.role import Role
 from api.models.referral_link import ReferralLink
+from api.models.referral import Referral, ReferrerType
 from api.models.purchase import Purchase
 from api.models.coin_bonus_ledger import CoinBonusLedger
 from api.models.partner_commission_ledger import PartnerCommissionLedger

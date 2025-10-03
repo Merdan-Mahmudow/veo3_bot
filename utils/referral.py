@@ -3,6 +3,9 @@ import json
 import base64
 import hashlib
 from datetime import datetime, timedelta
+import random
+import string
+from typing import Literal
 from config import Settings
 
 class ReferralService:
@@ -74,3 +77,6 @@ class ReferralService:
 
         except (json.JSONDecodeError, base64.binascii.Error, UnicodeDecodeError):
             return None # Invalid token format
+        
+
+    

@@ -7,7 +7,7 @@ from sqlalchemy.orm import selectinload
 from .interface import UserInterface
 from sqlalchemy.ext.asyncio import AsyncSession
 from .schema import CoinMinus, CoinPlus, UserDelete, UserRegister
-from api.models import User, Referral, ReferralLink, Role
+from api.models import User, ReferralLink, Role
 from api.models.referral_link import LinkType
 from utils.referral import ReferralService as LinkGenerationService
 from api.models.role import user_roles

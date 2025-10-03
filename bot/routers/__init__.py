@@ -127,7 +127,7 @@ async def command_start(message: types.Message, state: FSMContext):
             if len(command_args) > 1:
                 encoded_token = command_args[1]
                 referral_payload = referral_service.decode_and_validate_token(encoded_token)
-                print(referral_payload)
+                print("Referral Payload", referral_payload)
                 if not referral_payload:
                     logging.warning(f"Invalid or expired referral token used by chat_id {message.from_user.id}")
 
