@@ -15,7 +15,7 @@ class YookassaManager:
     def create_payment(self, payload: CreatePayment) -> str:
         idempotence_key = str(uuid.uuid4())
 
-        payment = Payment.create({
+        payment_data = {
             "amount": {
                 "value": payload.amount,
                 "currency": "RUB"
@@ -28,9 +28,12 @@ class YookassaManager:
                 "return_url": "https://t.me/Objectiveo3_bot"
             },
             "capture": True,
-            "description": payload.desc
-        },
-            idempotence_key
-        )
+            "description": payload.desc,
+            "metadata": {
+                "chat_id": payload.chat_id
+            }
+        }
+
+        payment = Payment.create(payment_data, idempotence_key)
 
         return payment.confirmation.confirmation_url

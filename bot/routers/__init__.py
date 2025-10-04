@@ -10,15 +10,21 @@ from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot import fsm
-from bot.api import BackendAPI
+from bot.api import BackendAPI, BackendUnexpectedError
 from config import ENV, Settings
 from services.redis import RedisClient
 from services.storage import YandexS3Storage
 from utils.progress import PROGRESS, show_progress
 from aiogram.enums import ParseMode
+from bot.routers.admin import router as admin_router
+from bot.routers.partner import router as partner_router
+from bot.routers.profile import router as profile_router
 
 
 router = Router()
+router.include_router(admin_router)
+router.include_router(partner_router)
+router.include_router(profile_router)
 env = ENV()
 backend = BackendAPI(env.bot_api_token)
 storage = YandexS3Storage()
@@ -28,16 +34,31 @@ settings = Settings()
 
 # --- Клавиатуры ---
 
-def start_keyboard(chat_id: int) -> types.InlineKeyboardMarkup:
+def start_keyboard(chat_id: int, role: str | None = None) -> types.InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     kb.button(text="Сгенерировать по тексту", callback_data="generate_by_text")
     kb.button(text="Сгенерировать по фото", callback_data="generate_photo")
     kb.button(text="💰 Пополнить баланс", callback_data="select_pay_method")
     kb.button(text="Что умею?", callback_data="help")
+    kb.button(text="🔗 Моя реф. ссылка", callback_data="my_referral_link")
     kb.button(text="Поддержка", url=f"https://t.me/{env.SUPPORT_USERNAME}")
+
+    # Динамически добавляем кнопки и строим схему верстки
+    adjust_scheme = [1, 1, 1, 2, 1] # Базовая схема для 6 кнопок
+
+    if role == 'partner':
+        kb.button(text="🤝 Кабинет партнера", callback_data="partner_cabinet")
     if chat_id in settings.get_admins_chat_id():
-        kb.button(text="Панель андминистратора", web_app=types.WebAppInfo(url=env.ADMIN_SITE))
-    kb.adjust(1, 1, 1, 2, 1)
+        kb.button(text="Панель администратора", callback_data="admin_panel")
+
+    # Если есть обе доп. кнопки, размещаем их в один ряд
+    if role == 'partner' and chat_id in settings.get_admins_chat_id():
+        adjust_scheme.append(2)
+    # Если только одна - каждая в своем ряду
+    elif role == 'partner' or chat_id in settings.get_admins_chat_id():
+        adjust_scheme.append(1)
+
+    kb.adjust(*adjust_scheme)
     return kb.as_markup()
 
 
@@ -92,8 +113,11 @@ async def _stop_task(task: asyncio.Task | None):
 
 # --- Команда /start и возвращение в начало ---
 
+from aiogram.filters import CommandObject
+
 @router.message(Command("start"))
-async def command_start(message: types.Message, state: FSMContext):
+async def command_start(message: types.Message, state: FSMContext, command: CommandObject):
+    referral_code = command.args if command.args else None
 
     # Проверяем наличие пользователя
     try:
@@ -118,7 +142,12 @@ async def command_start(message: types.Message, state: FSMContext):
             or f"user_{message.from_user.id}"
         )
         try:
-            res = await backend.register_user(message.from_user.id, nickname=nickname)
+            # Передаем реферальный код при регистрации
+            res = await backend.register_user(
+                chat_id=message.from_user.id,
+                nickname=nickname,
+                referral_code=referral_code
+            )
         except Exception:
             await message.answer("Техническая ошибка при регистрации. Напиши @softp04")
             return
@@ -127,11 +156,26 @@ async def command_start(message: types.Message, state: FSMContext):
             await message.answer("Внутренняя ошибка регистрации. Напиши @softp04")
             return
 
-    # Общая ветка после ensure user: получаем баланс и даём меню
+        # После успешной регистрации создаем для пользователя его личную реф. ссылку
+        try:
+            await backend.create_user_referral_link(message.from_user.id)
+        except BackendUnexpectedError as e:
+            # Если ошибка в том, что ссылка уже существует, это нормально при повторном /start.
+            # Игнорируем ее, но логируем другие бизнес-ошибки.
+            if "already exists" not in str(e).lower():
+                logging.error(f"Failed to create referral link for user {message.from_user.id}: {e}")
+        except Exception as e:
+            # Логируем другие, непредвиденные ошибки
+            logging.error(f"An unexpected error occurred while creating referral link for user {message.from_user.id}: {e}")
+
+    # Общая ветка после ensure user: получаем данные пользователя и даём меню
     try:
-        coins = await backend.get_coins(message.from_user.id)
+        user_data = await backend.get_user(message.from_user.id)
+        coins = user_data.get("coins", 0)
+        role = user_data.get("role")
     except Exception:
-        coins = 0  # если не достали баланс — не роняем UX
+        coins = 0
+        role = None
 
     if not exists:
         text = (
@@ -141,12 +185,12 @@ async def command_start(message: types.Message, state: FSMContext):
     else:
         text = (
             f"С возвращением!\n\nУ тебя {coins} генераций.\n\n"
-            "Шаг 1/3. Выбери способ создания видео::"
+            "Шаг 1/3. Выбери способ создания видео:"
         )
 
     sent_message: Optional[types.Message] = await message.answer(
         text,
-        reply_markup=start_keyboard(message.from_user.id)
+        reply_markup=start_keyboard(message.from_user.id, role)
     )
 
     # Сохраняем id отправленного сообщения
@@ -158,10 +202,17 @@ async def command_start(message: types.Message, state: FSMContext):
 async def back_to_start(callback: types.CallbackQuery, state: FSMContext):
     await state.clear()
     user_id = callback.from_user.id
-    coins = await backend.get_coins(user_id)
+    try:
+        user_data = await backend.get_user(user_id)
+        coins = user_data.get("coins", 0)
+        role = user_data.get("role")
+    except Exception:
+        coins = 0
+        role = None
+
     sent = await callback.message.answer(
         f"У тебя {coins} генераций.\n\nШаг 1/3. Выбери способ создания видео:",
-        reply_markup=start_keyboard(callback.from_user.id)
+        reply_markup=start_keyboard(user_id, role)
     )
     await state.update_data(start_message_id=sent.message_id)
     await callback.answer()

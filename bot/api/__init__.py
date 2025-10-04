@@ -144,12 +144,15 @@ class BackendAPI:
         except BackendNotFound:
             return False
 
-    async def register_user(self, chat_id: int, nickname: Optional[str] = None) -> RegisterResult:
+    async def register_user(self, chat_id: int, nickname: Optional[str] = None, referral_code: Optional[str] = None) -> RegisterResult:
         """
         Регистрирует пользователя.
         Возвращает {"created": True} или {"created": False, "reason": "exists"}.
         """
         payload = {"chat_id": str(chat_id), "nickname": (nickname or f"user_{chat_id}")[:64]}
+        if referral_code:
+            payload["referral_code"] = referral_code
+
         try:
             await self._request("POST", "/users/register", json=payload, expected=(200, 201))
             return {"created": True}
@@ -161,6 +164,85 @@ class BackendAPI:
         except BackendServerError:
             # на случай, если бэкенд отвечает 409 при дубле — считаем exists
             return {"created": False, "reason": "exists"}
+
+    async def create_user_referral_link(self, chat_id: int) -> dict:
+        """
+        Создает персональную реферальную ссылку для пользователя.
+        """
+        payload = {"chat_id": str(chat_id)}
+        resp = await self._request("POST", "/referrals/create-user-link", json=payload, expected=(200, 201))
+        return resp.json()
+
+    async def create_partner_link(self, user_id: str, percent: int, comment: str) -> dict:
+        """
+        Создает партнерскую ссылку для указанного пользователя.
+        """
+        payload = {
+            "owner_id": user_id,
+            "percent": percent,
+            "comment": comment
+        }
+        resp = await self._request("POST", "/referrals/create-partner-link", json=payload, expected=(200, 201))
+        return resp.json()
+
+    async def get_payout_requests(self, status: str) -> list[dict]:
+        """
+        Получает список заявок на выплату по статусу.
+        """
+        resp = await self._request("GET", f"/payouts?status={status}", expected=(200,))
+        return resp.json()
+
+    async def approve_payout_request(self, request_id: str) -> None:
+        """
+        Одобряет заявку на выплату.
+        """
+        await self._request("PATCH", f"/payouts/{request_id}/approve", expected=(200, 204))
+
+    async def reject_payout_request(self, request_id: str) -> None:
+        """
+        Отклоняет заявку на выплату.
+        """
+        await self._request("PATCH", f"/payouts/{request_id}/reject", expected=(200, 204))
+
+    async def get_partner_dashboard(self, chat_id: int) -> dict:
+        """
+        Получает данные для дашборда партнера.
+        """
+        resp = await self._request("GET", f"/partners/dashboard/{chat_id}", expected=(200,))
+        return resp.json()
+
+    async def get_partner_links(self, chat_id: int) -> list[dict]:
+        """
+        Получает список партнерских ссылок для пользователя.
+        """
+        resp = await self._request("GET", f"/partners/links/{chat_id}", expected=(200,))
+        return resp.json()
+
+    async def get_payout_history(self, chat_id: int) -> list[dict]:
+        """
+        Получает историю заявок на выплату для партнера.
+        """
+        resp = await self._request("GET", f"/payouts/history/{chat_id}", expected=(200,))
+        return resp.json()
+
+    async def request_payout(self, chat_id: int, amount_minor: int, requisites: dict) -> dict:
+        """
+        Создает заявку на выплату от имени партнера.
+        """
+        payload = {
+            "chat_id": str(chat_id),
+            "amount_minor": amount_minor,
+            "requisites_json": requisites
+        }
+        resp = await self._request("POST", "/payouts/request", json=payload, expected=(201,))
+        return resp.json()
+
+    async def get_my_referral_info(self, chat_id: int) -> dict:
+        """
+        Получает информацию о реферальной ссылке и статистике пользователя.
+        """
+        resp = await self._request("GET", f"/users/my-referral-info/{chat_id}", expected=(200,))
+        return resp.json()
 
     async def ensure_user(self, chat_id: int, nickname: Optional[str] = None) -> RegisterResult:
         """
@@ -176,6 +258,33 @@ class BackendAPI:
         """
         resp = await self._request("GET", f"/users/{chat_id}", expected=(200,))
         return resp.json()
+
+    async def find_user(self, identifier: str) -> Optional[dict]:
+        """
+        Ищет пользователя по chat_id или nickname.
+        """
+        try:
+            resp = await self._request("GET", f"/users/find/{identifier}", expected=(200,))
+            return resp.json()
+        except BackendNotFound:
+            return None
+
+    async def get_user_by_id(self, user_id: str) -> Optional[dict]:
+        """
+        Получает пользователя по его UUID.
+        """
+        try:
+            resp = await self._request("GET", f"/users/id/{user_id}", expected=(200,))
+            return resp.json()
+        except BackendNotFound:
+            return None
+
+    async def set_user_role(self, user_id: str, role: str) -> None:
+        """
+        Устанавливает роль для пользователя.
+        """
+        payload = {"role": role}
+        await self._request("PATCH", f"/users/{user_id}/role", json=payload, expected=(200, 204))
 
     async def get_coins(self, chat_id: int) -> int:
         """

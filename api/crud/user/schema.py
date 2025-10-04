@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from typing import Optional, Dict, Any
 
 class UserSchema(BaseModel):
     id: int
@@ -12,6 +13,7 @@ class UserSchema(BaseModel):
 class UserRegister(BaseModel):
     nickname: str
     chat_id: str
+    referral_code: Optional[str] = None
     class Config:
         from_attributes = True
 
@@ -20,6 +22,9 @@ class UserRead(UserSchema):
 
     class Config:
         from_attributes = True
+
+class UserUpdateRole(BaseModel):
+    role: str
 
 class UserDelete(BaseModel):
     chat_id: str

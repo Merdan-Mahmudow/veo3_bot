@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.database import get_async_session
 from api.crud.user.schema import (
-    UserRegister, UserDelete, CoinMinus, CoinPlus
+    UserRegister, UserDelete, CoinMinus, CoinPlus, UserUpdateRole
 )
 from api.crud.user import UserService, UserNotFound, BusinessRuleError
 
@@ -40,6 +40,21 @@ async def register_user(
         return await service.register_user(dto, session)
     except BusinessRuleError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/my-referral-info/{chat_id}", summary="Получение информации о реферальной ссылке пользователя")
+async def get_user_referral_info(
+    chat_id: str,
+    session: AsyncSession = Depends(get_async_session),
+    service: UserService = Depends(get_user_service),
+):
+    try:
+        # Pydantic не может напрямую серилизовать ORM-объект, поэтому
+        # мы должны будем обработать его в `profile.py` в боте.
+        # В более сложном проекте здесь была бы своя Pydantic-схема.
+        return await service.get_my_referral_info(chat_id, session)
+    except UserNotFound as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 @router.get("/{chat_id}", summary="Получение информации о пользователе")
@@ -161,6 +176,43 @@ async def minus_coin(
     try:
         coins = await service.minus_coin(dto, session)
         return {"ok": True, "coins": coins}
+    except UserNotFound as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessRuleError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/find/{identifier}", summary="Поиск пользователя по chat_id или nickname")
+async def find_user(
+    identifier: str,
+    session: AsyncSession = Depends(get_async_session),
+    service: UserService = Depends(get_user_service),
+):
+    try:
+        return await service.find_user(identifier, session)
+    except UserNotFound as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+@router.get("/id/{user_id}", summary="Получение пользователя по UUID")
+async def get_user_by_id(
+    user_id: str,
+    session: AsyncSession = Depends(get_async_session),
+    service: UserService = Depends(get_user_service),
+):
+    try:
+        return await service.get_user_by_id(user_id, session)
+    except UserNotFound as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+@router.patch("/{user_id}/role", summary="Изменение роли пользователя")
+async def set_user_role(
+    user_id: str,
+    dto: UserUpdateRole,
+    session: AsyncSession = Depends(get_async_session),
+    service: UserService = Depends(get_user_service),
+):
+    try:
+        return await service.set_user_role(user_id, dto.role, session)
     except UserNotFound as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except BusinessRuleError as e:
