@@ -23,3 +23,17 @@ class PaymentState(StatesGroup):
     processing_payment = State()    # ждём оплаты
     confirming = State()            # подтверждаем оплату
     choosing_method = State()
+
+class PayoutState(StatesGroup):
+    waiting_for_amount = State()
+    waiting_for_requisites = State()
+
+class CreatePartnerLinkState(StatesGroup):
+    waiting_for_partner_chat_id = State()
+    waiting_for_percentage = State()
+    waiting_for_comment = State()
+
+
+class LinkRequestState(StatesGroup):
+    waiting_for_percentage = State()
+    waiting_for_comment = State()

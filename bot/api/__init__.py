@@ -144,23 +144,163 @@ class BackendAPI:
         except BackendNotFound:
             return False
 
-    async def register_user(self, chat_id: int, nickname: Optional[str] = None) -> RegisterResult:
+    async def register_user(
+        self,
+        chat_id: int,
+        nickname: Optional[str] = None,
+        *,
+        referrer_type: str | None = None,
+        referrer_id: str | None = None,
+        ref_link_id: str | None = None,
+    ) -> dict:
         """
         Регистрирует пользователя.
-        Возвращает {"created": True} или {"created": False, "reason": "exists"}.
+        Возвращает {"ok": True, "user_id": ..., "chat_id": ...}.
         """
-        payload = {"chat_id": str(chat_id), "nickname": (nickname or f"user_{chat_id}")[:64]}
+        payload = {
+            "chat_id": str(chat_id),
+            "nickname": (nickname or f"user_{chat_id}")[:64],
+            "referrer_type": referrer_type,
+            "referrer_id": referrer_id,
+            "ref_link_id": ref_link_id,
+        }
+        # Убираем None значения из payload
+        payload = {k: v for k, v in payload.items() if v is not None}
+
         try:
-            await self._request("POST", "/users/register", json=payload, expected=(200, 201))
-            return {"created": True}
+            resp = await self._request("POST", "/users/register", json=payload, expected=(200, 201))
+            return resp.json()
         except BackendUnexpectedError as e:
             msg = str(e).lower()
             if "exists" in msg or "already exists" in msg:
-                return {"created": False, "reason": "exists"}
+                # Если пользователь уже существует, возвращаем ошибку, чтобы обработать это в боте
+                raise BackendError("User already exists")
             raise
-        except BackendServerError:
-            # на случай, если бэкенд отвечает 409 при дубле — считаем exists
-            return {"created": False, "reason": "exists"}
+
+    async def get_link_by_token(self, token: str) -> dict | None:
+        """
+        Получает информацию о реферальной ссылке по токену.
+        Возвращает dict с данными ссылки или None, если не найдено.
+        """
+        try:
+            resp = await self._request("GET", f"/referral/links/token/{token}", expected=(200,))
+            return resp.json()
+        except BackendNotFound:
+            return None
+
+    async def set_referrer(
+        self,
+        chat_id: int,
+        *,
+        referrer_type: str,
+        referrer_id: str,
+        ref_link_id: str,
+    ) -> dict:
+        """
+        Устанавливает реферера для существующего пользователя.
+        """
+        payload = {
+            "chat_id": str(chat_id),
+            "referrer_type": referrer_type,
+            "referrer_id": referrer_id,
+            "ref_link_id": ref_link_id,
+        }
+        resp = await self._request("PUT", "/users/referrer", json=payload, expected=(200,))
+        return resp.json()
+
+    async def get_user_links(self, user_id: str) -> list[dict]:
+        """
+        Получает все реферальные ссылки пользователя.
+        """
+        resp = await self._request("GET", f"/referral/links/{user_id}", expected=(200,))
+        return resp.json()
+
+    async def get_partner_stats(self, partner_id: str) -> dict:
+        """
+        Получает статистику для партнера.
+        """
+        resp = await self._request("GET", f"/referral/partners/{partner_id}/stats", expected=(200,))
+        return resp.json()
+
+    async def create_payout_request(self, partner_id: str, amount_minor: int, requisites: dict) -> dict:
+        """
+        Создает заявку на выплату для партнера.
+        """
+        payload = {
+            "partner_id": partner_id,
+            "amount_minor": amount_minor,
+            "requisites_json": requisites,
+        }
+        resp = await self._request("POST", "/referral/payouts", json=payload, expected=(201,))
+        return resp.json()
+
+    async def list_payout_requests(self, actor_chat_id: str, status: str | None = None) -> list[dict]:
+        """
+        Получает список заявок на выплату.
+        """
+        # We need to handle query params correctly
+        request_url = "/referral/payouts"
+        params = {"actor_chat_id": str(actor_chat_id)}
+        if status:
+            params["status"] = status
+
+        resp = await self._request("GET", request_url, params=params, expected=(200,))
+        return resp.json()
+
+    async def update_payout_status(self, payout_id: str, actor_chat_id: str, new_status: str) -> dict:
+        """
+        Обновляет статус заявки на выплату.
+        """
+        payload = {
+            "actor_chat_id": str(actor_chat_id),
+            "status": new_status,
+        }
+        resp = await self._request("PATCH", f"/referral/payouts/{payout_id}", json=payload, expected=(200,))
+        return resp.json()
+
+    async def create_referral_link(
+        self,
+        owner_id: str,
+        link_type: str,
+        percent: int,
+        comment: str,
+        actor_chat_id: str
+    ) -> dict:
+        """
+        Создает новую партнерскую ссылку.
+        """
+        payload = {
+            "owner_id": owner_id,
+            "link_type": link_type,
+            "percent": percent,
+            "comment": comment,
+            "actor_chat_id": actor_chat_id,
+        }
+        resp = await self._request("POST", "/referral/links", json=payload, expected=(201,))
+        return resp.json()
+
+    async def create_link_request(self, partner_id: str, requested_percent: int, comment: str) -> dict:
+        """
+        Создает запрос от партнера на создание новой реферальной ссылки.
+        """
+        payload = {
+            "partner_id": partner_id,
+            "requested_percent": requested_percent,
+            "comment": comment,
+        }
+        resp = await self._request("POST", "/referral/link-requests", json=payload, expected=(201,))
+        return resp.json()
+
+    async def process_link_request(self, request_id: str, actor_chat_id: str, new_status: str) -> dict:
+        """
+        Обновляет статус запроса на ссылку (одобрить/отклонить).
+        """
+        payload = {
+            "actor_chat_id": str(actor_chat_id),
+            "status": new_status,
+        }
+        resp = await self._request("PATCH", f"/referral/link-requests/{request_id}", json=payload, expected=(200,))
+        return resp.json()
 
     async def ensure_user(self, chat_id: int, nickname: Optional[str] = None) -> RegisterResult:
         """

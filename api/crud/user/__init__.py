@@ -4,6 +4,7 @@ from .interface import UserInterface
 from sqlalchemy.ext.asyncio import AsyncSession
 from .schema import CoinMinus, CoinPlus, UserDelete, UserRegister
 from api.models.user import User
+from api.models.referral import ReferralLink
 
 
 class UserNotFound(Exception): ...
@@ -11,15 +12,40 @@ class BusinessRuleError(Exception): ...
 
 
 class UserService(UserInterface):
-    async def register_user(self, dto: UserRegister, session: AsyncSession) -> Dict[str, Any]:
-        # пример: запретить дубли по chat_id
-        exists = await session.scalar(select(func.count()).select_from(User).where(User.chat_id == dto.chat_id))
+    async def register_user(self, dto: UserRegister, session: AsyncSession) -> User:
+        """
+        Registers a new user. If referral data is provided, it's validated and saved.
+        Returns the created user object.
+        """
+        # 1. Check for duplicates
+        exists = await session.scalar(select(User).where(User.chat_id == dto.chat_id))
         if exists:
             raise BusinessRuleError("User with this chat_id already exists")
 
-        await session.execute(insert(User).values(dto.model_dump()))
+        # 2. Validate referral data if provided
+        if dto.referrer_id:
+            referrer = await session.get(User, dto.referrer_id)
+            if not referrer:
+                raise BusinessRuleError(f"Referrer with id {dto.referrer_id} not found.")
+
+        if dto.ref_link_id:
+            ref_link = await session.get(ReferralLink, dto.ref_link_id)
+            if not ref_link:
+                raise BusinessRuleError(f"Referral link with id {dto.ref_link_id} not found.")
+
+            # Optional but good practice: check if the link belongs to the referrer
+            if dto.referrer_id and ref_link.owner_id != dto.referrer_id:
+                raise BusinessRuleError("Referrer ID does not match the owner of the referral link.")
+
+        # 3. Create user
+        stmt = insert(User).values(**dto.model_dump(exclude_unset=True)).returning(User)
+        result = await session.execute(stmt)
+        new_user = result.scalar_one()
+
         await session.commit()
-        return {"ok": True}
+        await session.refresh(new_user)
+
+        return new_user
 
     async def get_user(self, chat_id: str, session: AsyncSession):
         res = await session.execute(select(User).where(User.chat_id == chat_id))
@@ -27,6 +53,30 @@ class UserService(UserInterface):
         if not user:
             raise UserNotFound("User not found")
         return user
+
+    async def set_referrer(self, dto: UserReferrerUpdate, session: AsyncSession) -> User:
+        """
+        Sets the referrer for an existing user, but only if they don't already have one.
+        """
+        user = await self.get_user(dto.chat_id, session)
+        if user.referrer_id:
+            raise BusinessRuleError("User already has a referrer.")
+
+        stmt = (
+            update(User)
+            .where(User.chat_id == dto.chat_id)
+            .values(
+                referrer_type=dto.referrer_type,
+                referrer_id=dto.referrer_id,
+                ref_link_id=dto.ref_link_id,
+            )
+            .returning(User)
+        )
+        result = await session.execute(stmt)
+        updated_user = result.scalar_one()
+        await session.commit()
+        await session.refresh(updated_user)
+        return updated_user
 
     async def delete_user(self, dto: UserDelete, session: AsyncSession) -> None:
         result = await session.execute(delete(User).where(User.chat_id == dto.chat_id))

@@ -1,5 +1,4 @@
-from api.models import Base
-
+from api.database.base import Base
 from datetime import datetime
 import uuid
 from sqlalchemy import UUID, Boolean, DateTime, String, Integer, Text

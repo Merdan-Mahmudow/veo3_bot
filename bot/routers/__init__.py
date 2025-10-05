@@ -4,13 +4,21 @@ import json
 import logging
 from typing import Optional
 
-from aiogram import Router, types, F
+import asyncio
+from contextlib import suppress
+import json
+import logging
+from typing import Optional
+
+from aiogram import F, Router, types
+from aiogram.enums import ParseMode
+from aiogram.filters import CommandObject
 from aiogram.filters.command import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot import fsm
-from bot.api import BackendAPI
+from bot.api import BackendAPI, BackendError
 from config import ENV, Settings
 from services.redis import RedisClient
 from services.storage import YandexS3Storage
@@ -33,11 +41,12 @@ def start_keyboard(chat_id: int) -> types.InlineKeyboardMarkup:
     kb.button(text="Сгенерировать по тексту", callback_data="generate_by_text")
     kb.button(text="Сгенерировать по фото", callback_data="generate_photo")
     kb.button(text="💰 Пополнить баланс", callback_data="select_pay_method")
+    kb.button(text="👥 Реферальная программа", callback_data="referral_program")
     kb.button(text="Что умею?", callback_data="help")
     kb.button(text="Поддержка", url=f"https://t.me/{env.SUPPORT_USERNAME}")
     if chat_id in settings.get_admins_chat_id():
-        kb.button(text="Панель андминистратора", web_app=types.WebAppInfo(url=env.ADMIN_SITE))
-    kb.adjust(1, 1, 1, 2, 1)
+        kb.button(text="Панель администратора", callback_data="admin_panel") # Changed to callback
+    kb.adjust(1, 1, 1, 1, 2)
     return kb.as_markup()
 
 
@@ -93,63 +102,83 @@ async def _stop_task(task: asyncio.Task | None):
 # --- Команда /start и возвращение в начало ---
 
 @router.message(Command("start"))
-async def command_start(message: types.Message, state: FSMContext):
+async def command_start(message: types.Message, command: CommandObject, state: FSMContext):
+    """
+    Handles the /start command, including referral links (deep linking).
+    """
+    # 1. Handle referral token from deep link
+    ref_token = command.args
+    referral_params = {}
+    if ref_token:
+        try:
+            link_info = await backend.get_link_by_token(ref_token)
+            if link_info:
+                # We have a valid referral link, prepare params for registration
+                referral_params = {
+                    "referrer_type": link_info["link_type"],
+                    "referrer_id": link_info["owner_id"],
+                    "ref_link_id": link_info["id"],
+                }
+                logging.info(f"Referral link {ref_token} processed for user {message.from_user.id}")
+        except Exception as e:
+            logging.error(f"Error processing referral token {ref_token}: {e}")
+            # Continue without referral data, don't block the user
 
-    # Проверяем наличие пользователя
+    # 2. Get user data
+    user = None
     try:
-        exists = await backend.check_user_exist(message.from_user.id)
-    except Exception:
+        user = await backend.get_user(message.from_user.id)
+    except BackendError:
+        pass # User not found, will be handled below
+    except Exception as e:
+        logging.error(f"Error getting user {message.from_user.id}: {e}")
         await message.answer("Техническая ошибка соединения. Попробуй ещё раз позже.")
         return
 
-    # Если нет — регаем
-    if not exists:
-        # Баннер
+    # 3. Handle registration or referrer update
+    is_new_user = user is None
+    if is_new_user:
+        # Register new user with referral data if available
         await message.answer_photo(
-            photo=types.URLInputFile(
-                "https://storage.yandexcloud.net/veobot/photo_2025-08-12_00-07-56.jpg"),
+            photo=types.URLInputFile("https://storage.yandexcloud.net/veobot/photo_2025-08-12_00-07-56.jpg"),
             caption="Привет! Я генерирую для тебя лучшее видео по твоему запросу.\n\n"
         )
-
         await message.answer("Ты у нас впервые. Регистрирую…")
-        nickname = (
-            message.from_user.username
-            or message.from_user.first_name
-            or f"user_{message.from_user.id}"
-        )
+        nickname = message.from_user.username or message.from_user.first_name or f"user_{message.from_user.id}"
         try:
-            res = await backend.register_user(message.from_user.id, nickname=nickname)
-        except Exception:
+            await backend.register_user(message.from_user.id, nickname=nickname, **referral_params)
+        except Exception as e:
+            logging.error(f"Registration failed for user {message.from_user.id}: {e}")
             await message.answer("Техническая ошибка при регистрации. Напиши @softp04")
             return
+    elif referral_params and user and user.get("referrer_id") is None:
+        # User exists but has no referrer, so set it
+        try:
+            await backend.set_referrer(message.from_user.id, **referral_params)
+            await message.answer("Вы пришли по приглашению! Ваш пригласитель был успешно зарегистрирован.")
+        except Exception as e:
+            logging.error(f"Failed to set referrer for user {message.from_user.id}: {e}")
+            # Don't block the user, just log the error
 
-        if not res.get("created", False) and res.get("reason") != "exists":
-            await message.answer("Внутренняя ошибка регистрации. Напиши @softp04")
-            return
-
-    # Общая ветка после ensure user: получаем баланс и даём меню
+    # 4. Welcome message and main menu
     try:
         coins = await backend.get_coins(message.from_user.id)
     except Exception:
-        coins = 0  # если не достали баланс — не роняем UX
+        coins = 0  # if balance check fails, don't ruin the UX
 
-    if not exists:
-        text = (
-            "Регистрация прошла успешно! Теперь давай сгенерируем видео!\n\n"
-            f"У тебя {coins} генераций.\n\nШаг 1/3. Выбери способ создания видео:"
-        )
+    if is_new_user:
+        text = "Регистрация прошла успешно! Теперь давай сгенерируем видео!\n\n"
+        if referral_params:
+            text += "Вы пришли по приглашению, за это вам положен бонус после первой покупки!\n\n"
+        text += f"У тебя {coins} генераций.\n\nШаг 1/3. Выбери способ создания видео:"
     else:
-        text = (
-            f"С возвращением!\n\nУ тебя {coins} генераций.\n\n"
-            "Шаг 1/3. Выбери способ создания видео::"
-        )
+        text = f"С возвращением!\n\nУ тебя {coins} генераций.\n\nШаг 1/3. Выбери способ создания видео:"
 
     sent_message: Optional[types.Message] = await message.answer(
         text,
         reply_markup=start_keyboard(message.from_user.id)
     )
 
-    # Сохраняем id отправленного сообщения
     await state.update_data(start_message_id=sent_message.message_id)
     await state.set_state(fsm.BotState.start_message_id)
 

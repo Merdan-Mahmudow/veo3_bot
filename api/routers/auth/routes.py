@@ -3,9 +3,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.database import get_async_session
 from api.crud.user.schema import (
-    UserRegister, UserDelete, CoinMinus, CoinPlus
+    UserRegister, UserDelete, CoinMinus, CoinPlus, UserReferrerUpdate
 )
 from api.crud.user import UserService, UserNotFound, BusinessRuleError
+from api.crud.referral import ReferralService
+from api.crud.referral.schema import ReferralLinkCreate
+from api.models.referral import LinkType
 
 
 router = APIRouter()
@@ -13,12 +16,16 @@ router = APIRouter()
 def get_user_service() -> UserService:
     return UserService()
 
+def get_referral_service() -> ReferralService:
+    return ReferralService()
+
 
 @router.post("/register", summary="Регистрация пользователя")
 async def register_user(
     dto: UserRegister,
     session: AsyncSession = Depends(get_async_session),
-    service: UserService = Depends(get_user_service),
+    user_service: UserService = Depends(get_user_service),
+    referral_service: ReferralService = Depends(get_referral_service),
 ):
     """
     Регистрация пользователя по chat_id.
@@ -35,9 +42,22 @@ async def register_user(
     Входные данные:
     - `username: str` | None - имя пользователя в Telegram
     - `chat_id: str` - уникальный идентификатор пользователя в Telegram
+    - `referrer_type: str` | None - тип реферера ('user' или 'partner')
+    - `referrer_id: str` | None - UUID реферера
+    - `ref_link_id: str` | None - UUID реферальной ссылки
     """
     try:
-        return await service.register_user(dto, session)
+        new_user = await user_service.register_user(dto, session)
+
+        # Automatically create a personal referral link for the new user
+        link_dto = ReferralLinkCreate(
+            owner_id=new_user.id,
+            link_type=LinkType.USER,
+            comment="Default user link"
+        )
+        await referral_service.create_referral_link(link_dto, session)
+
+        return {"ok": True, "user_id": new_user.id, "chat_id": new_user.chat_id}
     except BusinessRuleError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -161,6 +181,24 @@ async def minus_coin(
     try:
         coins = await service.minus_coin(dto, session)
         return {"ok": True, "coins": coins}
+    except UserNotFound as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessRuleError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.put("/referrer", summary="Установить реферера для пользователя")
+async def set_referrer(
+    dto: UserReferrerUpdate,
+    session: AsyncSession = Depends(get_async_session),
+    service: UserService = Depends(get_user_service),
+):
+    """
+    Устанавливает реферера для существующего пользователя, если он еще не установлен.
+    """
+    try:
+        updated_user = await service.set_referrer(dto, session)
+        return updated_user
     except UserNotFound as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except BusinessRuleError as e:
