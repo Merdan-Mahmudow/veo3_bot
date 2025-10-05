@@ -1,4 +1,4 @@
-from typing import Any, Dict
+from typing import Any, Dict, Literal
 from sqlalchemy import insert, select, update, delete, func
 from .interface import UserInterface
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -81,3 +81,26 @@ class UserService(UserInterface):
         res = await session.execute(select(User.chat_id))
         chat_ids = res.scalars().all()
         return chat_ids
+    
+    async def get_all_ref_codes(self, session: AsyncSession) -> list:
+        res = await session.execute(select(User.ref_code).where(User.ref_code != None))
+        codes = res.scalars().all()
+        return codes
+    
+    async def update_user_role(self, chat_id: str, new_role: Literal["user", "partner"], session: AsyncSession) -> None:
+        stmt = (
+            update(User)
+            .where(User.chat_id == chat_id)
+            .values(role=new_role)
+        )
+        res = await session.execute(stmt)
+        await session.commit()
+        if res.rowcount == 0:
+            raise UserNotFound("User not found")
+        
+    async def get_ref_code(self, chat_id: str, session: AsyncSession) -> str | None:
+        res = await session.execute(select(User.ref_code).where(User.chat_id == chat_id))
+        code = res.scalar_one_or_none()
+        if code is None:
+            raise UserNotFound("User not found")
+        return code

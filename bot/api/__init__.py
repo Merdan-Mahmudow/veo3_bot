@@ -149,7 +149,7 @@ class BackendAPI:
         Регистрирует пользователя.
         Возвращает {"created": True} или {"created": False, "reason": "exists"}.
         """
-        payload = {"chat_id": str(chat_id), "nickname": (nickname or f"user_{chat_id}")[:64]}
+        payload = {"chat_id": str(chat_id), "nickname": (nickname or f"user_{chat_id}")[:64], "role": "user"}
         try:
             await self._request("POST", "/users/register", json=payload, expected=(200, 201))
             return {"created": True}
@@ -316,3 +316,9 @@ class BackendAPI:
         resp = await self._request("POST", "/pay/sbp/create", json=payload, expected=(200,))
 
         return resp.text
+    
+    async def get_ref_link(self, user_chat_id: str) -> Optional[dict]:
+        resp = await self._request("GET", f"users/{user_chat_id}/ref_code", expected=(200, 404))
+        if resp.status_code == 404:
+            return None
+        return resp.json()

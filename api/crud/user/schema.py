@@ -1,3 +1,4 @@
+from typing import Literal, Optional
 from pydantic import BaseModel
 
 class UserSchema(BaseModel):
@@ -12,6 +13,8 @@ class UserSchema(BaseModel):
 class UserRegister(BaseModel):
     nickname: str
     chat_id: str
+    role: Literal["user", "partner"]
+    ref_code: Optional[str] = None
     class Config:
         from_attributes = True
 

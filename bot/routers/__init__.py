@@ -2,7 +2,7 @@ import asyncio
 from contextlib import suppress
 import json
 import logging
-from typing import Optional
+from typing import Literal, Optional
 
 from aiogram import Router, types, F
 from aiogram.filters.command import Command
@@ -28,29 +28,35 @@ settings = Settings()
 
 # --- Клавиатуры ---
 
-def start_keyboard(chat_id: int) -> types.InlineKeyboardMarkup:
+def start_keyboard(chat_id: int, role: Literal["user", "partner"] = "user") -> types.InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     kb.button(text="Сгенерировать по тексту", callback_data="generate_by_text")
     kb.button(text="Сгенерировать по фото", callback_data="generate_photo")
     kb.button(text="💰 Пополнить баланс", callback_data="select_pay_method")
+    kb.button(text="Пригласить друга", callback_data="invite_friend")
     kb.button(text="Что умею?", callback_data="help")
     kb.button(text="Поддержка", url=f"https://t.me/{env.SUPPORT_USERNAME}")
+    if role == "partner":
+        kb.button(text="Партнёрская программа", callback_data="partner_program")
     if chat_id in settings.get_admins_chat_id():
         kb.button(text="Панель андминистратора", web_app=types.WebAppInfo(url=env.ADMIN_SITE))
-    kb.adjust(1, 1, 1, 2, 1)
+    kb.adjust(1, 1, 1, 1, 2, 1)
     return kb.as_markup()
 
 
-def help_keyboard(chat_id: int) -> types.InlineKeyboardMarkup:
+def help_keyboard(chat_id: int, role: Literal["user", "partner"] = "user") -> types.InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     kb.button(text="Сгенерировать по тексту", callback_data="generate_by_text")
     kb.button(text="Сгенерировать по фото", callback_data="generate_photo")
     kb.button(text="💰 Пополнить баланс", callback_data="select_pay_method")
+    kb.button(text="Пригласить друга", callback_data="invite_friend")
     kb.button(text="Назад", callback_data="start_back")
     kb.button(text="Поддержка", url=f"https://t.me/{env.SUPPORT_USERNAME}")
+    if role == "partner":
+        kb.button(text="Партнёрская программа", callback_data="partner_program")
     if chat_id in settings.get_admins_chat_id():
         kb.button(text="Панель андминистратора", web_app=types.WebAppInfo(url=env.ADMIN_SITE))
-    kb.adjust(1, 1, 1, 2, 1)
+    kb.adjust(1, 1, 1, 1, 2, 1)
     return kb.as_markup()
 
 
@@ -678,3 +684,18 @@ async def testing(callback: types.CallbackQuery):
     progress_task = asyncio.create_task(
         show_progress(progress_msg, stage="video"))
     print(callback.bot, callback.from_user.id, progress_msg.message_id)
+
+
+# --- Пригласить друга ---
+@router.callback_query(F.data == "invite_friend")
+async def invite_friend(callback: types.CallbackQuery):
+    await callback.answer()
+    referral = await backend.get_ref_link(str(callback.from_user.id))
+    text = (
+        "Приглашай друзей и получай бонусы!\n\n"
+        "За каждого приглашённого друга, который зарегистрируется и сделает хотя бы одну покупку, ты получаешь +1 генерацию на свой баланс.\n\n"
+        "Чтобы пригласить друга, просто отправь ему эту ссылку:\n"
+        f"{referral["ref_link"]}\n\n"
+        "Спасибо, что помогаешь нам расти! 🚀"
+    )
+    await callback.message.answer(text, reply_markup=InlineKeyboardBuilder().button(text="🏠 Главное меню", callback_data="start_back").as_markup())
