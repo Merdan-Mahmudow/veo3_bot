@@ -4,7 +4,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot.api import BackendAPI
-from bot.routers.admin import AdminFilter
+from .filters import AdminFilter
 from config import ENV
 
 router = Router()

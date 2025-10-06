@@ -6,9 +6,8 @@ from typing import List, Optional
 from sqlalchemy import UUID, DateTime, Enum, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from api.models import Base
-# Убираем прямой импорт User, чтобы избежать цикла
-# from api.models.user import User
+from .base import Base
+# avoid importing User to prevent cycles; use string annotations in relationships
 
 
 class ReferralLinkType(enum.Enum):
@@ -28,7 +27,11 @@ class ReferralLink(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default="now()", nullable=False)
 
     # Relationships
-    owner: Mapped["User"] = relationship(back_populates="owned_referral_links")
+    owner: Mapped["User"] = relationship(
+        "User",
+        back_populates="owned_referral_links",
+        foreign_keys=[owner_id]  # указываем локальный столбец owner_id как FK для отношения
+    )
     referred_users: Mapped[List["User"]] = relationship(back_populates="referral_link")
 
 
@@ -42,7 +45,7 @@ class Referral(Base):
     ref_link_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("referral_links.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default="now()", nullable=False)
 
-    # Relationships - используем строки для избежания циклов
+    # Relationships - use string annotations to avoid cycles
     new_user: Mapped["User"] = relationship(foreign_keys=[new_user_id])
     referrer: Mapped["User"] = relationship(foreign_keys=[referrer_id])
     link: Mapped["ReferralLink"] = relationship(foreign_keys=[ref_link_id])

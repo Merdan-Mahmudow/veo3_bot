@@ -2,7 +2,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.database import get_session
+from api.database import get_async_session
 from .service import PayoutService
 from .schemas import PayoutRequestCreate, PayoutRequestRead
 from api.models.payments import PayoutStatus
@@ -10,7 +10,7 @@ from api.crud.user import UserNotFound, BusinessRuleError
 
 router = APIRouter()
 
-def get_payout_service(session: AsyncSession = Depends(get_session)) -> PayoutService:
+def get_payout_service(session: AsyncSession = Depends(get_async_session)) -> PayoutService:
     return PayoutService(session)
 
 @router.get("", response_model=list[PayoutRequestRead], summary="Получение списка заявок на выплату по статусу")

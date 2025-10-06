@@ -3,7 +3,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot.api import BackendAPI
-from bot.routers.admin import AdminFilter
+from .filters import AdminFilter
 from config import ENV
 
 router = Router()

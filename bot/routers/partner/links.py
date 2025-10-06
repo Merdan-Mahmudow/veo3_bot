@@ -2,7 +2,7 @@ from aiogram import Router, F, types
 from aiogram.fsm.context import FSMContext
 
 from bot.api import BackendAPI
-from bot.routers.partner import PartnerFilter
+from .filters import PartnerFilter
 from config import ENV
 
 router = Router()

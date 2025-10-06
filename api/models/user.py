@@ -1,9 +1,10 @@
-from api.models import Base
+from .base import Base
 import enum
 import uuid
-from sqlalchemy import UUID, DateTime, Enum, ForeignKey, Integer, String
+from sqlalchemy import UUID, DateTime, Enum, ForeignKey, Integer, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing import List, Optional
+
 
 class UserRole(enum.Enum):
     USER = "user"
@@ -23,7 +24,12 @@ class User(Base):
     coins: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     # Referral system fields
-    role: Mapped[UserRole] = mapped_column(Enum(UserRole), default=UserRole.USER, server_default="user", nullable=False)
+    role: Mapped[UserRole] = mapped_column(
+        Enum(UserRole, name="userrole"), 
+        default=UserRole.USER, 
+        server_default=text(f"'{UserRole.USER.value}'"),
+        nullable=False,
+    )
     referrer_type: Mapped[Optional[ReferrerType]] = mapped_column(Enum(ReferrerType), nullable=True)
     referrer_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("users.id"), nullable=True)
     ref_link_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("referral_links.id"), nullable=True)
@@ -38,7 +44,11 @@ class User(Base):
     referral_link: Mapped[Optional["ReferralLink"]] = relationship(foreign_keys=[ref_link_id], back_populates="referred_users")
 
     # Links that I own
-    owned_referral_links: Mapped[List["ReferralLink"]] = relationship(back_populates="owner")
+    owned_referral_links: Mapped[List["ReferralLink"]] = relationship(
+        "ReferralLink",
+        back_populates="owner",
+        foreign_keys='[ReferralLink.owner_id]'  # явное указание FK для снятия неоднозначности
+    )
 
     purchases: Mapped[List["Purchase"]] = relationship(back_populates="user")
 

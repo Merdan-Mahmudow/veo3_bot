@@ -2,8 +2,8 @@ import uuid
 from sqlalchemy import UUID, Enum, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from api.models import Base
-from api.models.user import UserRole
+from .user import UserRole
+from .base import Base
 
 
 class Role(Base):

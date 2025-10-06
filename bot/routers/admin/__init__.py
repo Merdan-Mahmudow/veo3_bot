@@ -6,17 +6,13 @@ from config import Settings
 from .users import router as users_router
 from .partners import router as partners_router
 from .requests import router as requests_router
+from .filters import AdminFilter
 
 router = Router()
 router.include_router(users_router)
 router.include_router(partners_router)
 router.include_router(requests_router)
 settings = Settings()
-
-# Фильтр для проверки, является ли пользователь администратором
-class AdminFilter(F.Filter):
-    def __call__(self, message_or_callback: types.Message | types.CallbackQuery) -> bool:
-        return message_or_callback.from_user.id in settings.get_admins_chat_id()
 
 def admin_main_keyboard():
     kb = InlineKeyboardBuilder()

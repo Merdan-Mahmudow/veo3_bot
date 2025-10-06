@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
-from api.database import get_session
+from api.database import get_async_session
 from api.models import User, ReferralLink
 from api.models.user import UserRole
 from api.models.referral import ReferralLinkType
@@ -22,7 +22,7 @@ async def get_all_ref_codes(session: AsyncSession) -> list[str]:
 @router.post("/create-user-link", status_code=201)
 async def create_user_link(
     payload: CreateUserLinkSchema,
-    session: AsyncSession = Depends(get_session)
+    session: AsyncSession = Depends(get_async_session)
 ):
     user_query = await session.execute(select(User).where(User.chat_id == payload.chat_id))
     user = user_query.scalar_one_or_none()
@@ -54,7 +54,7 @@ async def create_user_link(
 @router.post("/create-partner-link", status_code=201)
 async def create_partner_link(
     payload: CreatePartnerLinkSchema,
-    session: AsyncSession = Depends(get_session)
+    session: AsyncSession = Depends(get_async_session)
 ):
     user = await session.get(User, payload.owner_id)
     if not user:

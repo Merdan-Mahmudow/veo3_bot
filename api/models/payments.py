@@ -5,9 +5,8 @@ from datetime import datetime
 from sqlalchemy import UUID, Boolean, DateTime, Enum, ForeignKey, Integer, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from api.models import Base
-from api.models.user import User
-from api.models.referral import ReferralLink
+from .base import Base
+# avoid importing User and ReferralLink to prevent cycles; use string annotations in relationships
 
 
 class PayoutStatus(enum.Enum):

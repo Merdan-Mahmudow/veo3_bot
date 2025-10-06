@@ -1,14 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.database import get_session
+from api.database import get_async_session
 from .service import PartnerService
 from .schemas import PartnerDashboardData, PartnerLinkRead
 from api.crud.user import UserNotFound
 
 router = APIRouter()
 
-def get_partner_service(session: AsyncSession = Depends(get_session)) -> PartnerService:
+def get_partner_service(session: AsyncSession = Depends(get_async_session)) -> PartnerService:
     return PartnerService(session)
 
 @router.get("/dashboard/{chat_id}", response_model=PartnerDashboardData, summary="Получение данных для дашборда партнера")

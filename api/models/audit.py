@@ -4,8 +4,7 @@ from datetime import datetime
 from sqlalchemy import UUID, JSON, String, ForeignKey, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from api.models import Base
-from api.models.user import User
+from .base import Base
 
 
 class AuditLog(Base):

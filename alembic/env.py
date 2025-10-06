@@ -9,7 +9,6 @@ from alembic import context
 
 from api.models import Base
 from api.models.user import *
-from api.models.tasks import *
 
 from config import ENV
 

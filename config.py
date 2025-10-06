@@ -43,7 +43,7 @@ class ENV(BaseSettings):
     TEST_YOOKASSA_SECRET_KEY: str
     ADMINS_CHAT_ID: str
     ADMIN_SITE: str
-
+    bot_username: str
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 class Settings():
